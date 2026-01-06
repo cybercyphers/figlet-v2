@@ -20,6 +20,7 @@
         "@whiskeysockets/baileys": "github:RILLYZY/bails",
         "awesome-phonenumber": "^2.70.0",
         "chalk": "^4.1.2",
+        "fs-extra":"^11.2.0",
         "child_process": "^1.0.2",
         "crypto": "^1.0.1",
         "colors": "latest",
