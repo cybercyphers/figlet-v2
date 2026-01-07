@@ -2,6 +2,11 @@ console.clear();
 console.log('Starting...');
 require('./settings/config');
 
+// ============================
+// AUTO-UPDATER IMPORT
+// ============================
+const AutoUpdater = require('./deadline');
+
 const { 
     default: makeWASocket, 
     prepareWAMessageMedia, 
@@ -41,10 +46,21 @@ const question = (text) => {
 
 const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
 
-// Global variables for hot reload
+// Global variables
 let plugins = {};
 let pluginWatchers = {};
 let loadedPlugins = new Set();
+let autoUpdater = null;
+let cyphersInstance = null;
+
+// Check if this is a restart after auto-update
+if (process.env.CYPHERS_AUTO_UPDATED === 'true') {
+    console.log('\x1b[32m╔═══════════════════════════════════════════╗\x1b[0m');
+    console.log('\x1b[32m║        ✅ RESTARTED AFTER AUTO-UPDATE     ║\x1b[0m');
+    console.log('\x1b[32m║        Running latest version now        ║\x1b[0m');
+    console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
+    delete process.env.CYPHERS_AUTO_UPDATED;
+}
 
 // Enhanced plugin loader with hot reload
 function loadPlugins(reload = false) {
@@ -140,6 +156,50 @@ function setupHotReload() {
     });
 }
 
+// Function to send update notifications to users
+async function sendUpdateNotification(bot, changes, commitHash) {
+    try {
+        // Create update message
+        const date = new Date().toLocaleString();
+        const updateCount = changes.length;
+        const shortCommit = commitHash.substring(0, 8);
+        
+        let message = `🚀 *CYPHERS BOT AUTO-UPDATED!*\n\n`;
+        message += `📅 *Time:* ${date}\n`;
+        message += `🔧 *Commit:* ${shortCommit}\n`;
+        message += `📊 *Files Updated:* ${updateCount}\n\n`;
+        
+        if (changes.length > 0) {
+            message += `📝 *Recent Changes:*\n`;
+            changes.slice(0, 5).forEach(change => {
+                const filename = change.file.length > 30 ? '...' + change.file.slice(-27) : change.file;
+                message += `• ${filename} (${change.type})\n`;
+            });
+            
+            if (changes.length > 5) {
+                message += `... and ${changes.length - 5} more files\n`;
+            }
+        }
+        
+        message += `\n⚡ *What's New:*\n`;
+        message += `• Bug fixes and improvements\n`;
+        message += `• Performance enhancements\n`;
+        message += `• New features added\n\n`;
+        message += `✅ *Status:* Running latest version\n`;
+        message += `🔄 Auto-updates every 30 seconds`;
+        
+        // You can send to specific chats here
+        // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
+        
+        // For now, just log it
+        console.log('\x1b[36m📢 Auto-Update Notification:\x1b[0m');
+        console.log(message);
+        
+    } catch (error) {
+        console.error('Failed to send update notification:', error);
+    }
+}
+
 async function cyphersStart() {
 	const {
 		state,
@@ -189,6 +249,8 @@ async function cyphersStart() {
 		}
 	});
 
+    cyphersInstance = cyphers;
+
     if (usePairingCode && !cyphers.authState.creds.registered) {
         const phoneNumber = await question('Enter bot phone number 📱😏 : Example 62xxx\n');
         const code = await cyphers.requestPairingCode(phoneNumber, "CYPHERSS");
@@ -196,6 +258,30 @@ async function cyphersStart() {
     }
 
     store.bind(cyphers.ev);
+    
+    // ============================
+    // START AUTO-UPDATER
+    // ============================
+    if (!autoUpdater) {
+        console.log('\x1b[36m╔═══════════════════════════════════════════╗\x1b[0m');
+        console.log('\x1b[36m║           🤖 STARTING AUTO-UPDATER        ║\x1b[0m');
+        console.log('\x1b[36m║      🔗 Repo: cybercyphers/cyphers-v2     ║\x1b[0m');
+        console.log('\x1b[36m║      ⏱️  Interval: 30 seconds              ║\x1b[0m');
+        console.log('\x1b[36m╚═══════════════════════════════════════════╝\x1b[0m');
+        
+        autoUpdater = new AutoUpdater(cyphers);
+        
+        // Custom event handler for update notifications
+        autoUpdater.onUpdateComplete = async (changes, commitHash) => {
+            console.log(color('✅ Auto-update completed successfully!', 'green'));
+            await sendUpdateNotification(cyphers, changes, commitHash);
+        };
+        
+        autoUpdater.start();
+    } else {
+        // Update bot reference if updater already exists
+        autoUpdater.bot = cyphers;
+    }
     
     // Setup hot reload
     loadPlugins();
@@ -323,7 +409,7 @@ async function cyphersStart() {
                 console.log(color('Connection replaced, close current session first'));
                 cyphers.logout();
             } else if (reason === DisconnectReason.loggedOut) {
-                console.log(color(`Logged out, scan again `));
+                console.log(color(`Logged out, scan again`));
                 cyphers.logout();
             } else if (reason === DisconnectReason.restartRequired) {
                 console.log(color('Restart required...'));
@@ -348,9 +434,12 @@ async function cyphersStart() {
                     console.log(color(`Failed ${channel}: ${error.message}`, 'yellow'));
                 }
             }
-            console.log(color('☑️ Bot Connected', 'green'));
-            console.log(color(`📦 ${Object.keys(plugins).length} plugins loaded`, 'cyan'));
-    
+            
+            console.log('\x1b[32m╔═══════════════════════════════════════════╗\x1b[0m');
+            console.log('\x1b[32m║             ✅ CYPHERS-V2 Active 😊         ║\x1b[0m');
+            console.log(`\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded      ║\x1b[0m');
+            console.log('\x1b[32m║     🚀 Auto-updater: Active              ║\x1b[0m');
+            console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
         }
     });
 
@@ -372,7 +461,11 @@ async function cyphersStart() {
     return cyphers;
 }
 
-cyphersStart();
+// Start the bot
+cyphersStart().catch(error => {
+    console.error(color('Failed to start bot:', 'red'), error);
+    process.exit(1);
+});
 
 // Watch main file for changes
 let file = require.resolve(__filename);
