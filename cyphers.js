@@ -437,7 +437,7 @@ async function cyphersStart() {
             
             console.log('\x1b[32m╔═══════════════════════════════════════════╗\x1b[0m');
             console.log('\x1b[32m║             ✅ CYPHERS-V2 Active 😊         ║\x1b[0m');
-            console.log(`\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded      ║\x1b[0m');
+            console.log('\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded      ║\x1b[0m');
             console.log('\x1b[32m║     🚀 Auto-updater: Active              ║\x1b[0m');
             console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
         }
