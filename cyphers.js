@@ -57,7 +57,7 @@ let cyphersInstance = null;
 if (process.env.CYPHERS_AUTO_UPDATED === 'true') {
     console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
     console.log('\x1b[32m│        ✅ VERIFIED UPDATE                              │\x1b[0m');
-    console.log('\x1b[32m│        Running latest version now ⚡                   │\x1b[0m');
+    console.log('\x1b[32m│        Running latest version now ⚡  seriously                  │\x1b[0m');
     console.log('\x1b[32m└──────────────────────────────────────────────────────────┘\x1b[0m');
     delete process.env.CYPHERS_AUTO_UPDATED;
 }
@@ -110,7 +110,7 @@ function loadPlugins(reload = false) {
             if (!pluginWatchers[pluginPath]) {
                 pluginWatchers[pluginPath] = fs.watch(pluginPath, (eventType) => {
                     if (eventType === 'change') {
-                        console.log(color(`🔄 ${file} changed, reloading immediately...`, 'yellow'));
+                        console.log(color(`🔄 ${file} changed, reloading....`, 'yellow'));
                         // Immediate reload without delay
                         try {
                             delete require.cache[require.resolve(pluginPath)];
@@ -161,7 +161,7 @@ function setupHotReload() {
                     try {
                         delete require.cache[require.resolve(fullPath)];
                         require(fullPath);
-                        console.log(color(`✅ ${filename} reloaded immediately`, 'green'));
+                        console.log(color(`✅ ${filename} reloaded `, 'green'));
                         
                         // If it's a plugin, update plugins list
                         if (dirPath.includes('plugins')) {
@@ -207,7 +207,7 @@ function setupHotReload() {
     if (fs.existsSync(configPath)) {
         fs.watch(configPath, (eventType) => {
             if (eventType === 'change') {
-                console.log(color('🔄 config.js changed, reloading immediately...', 'yellow'));
+                console.log(color('🔄 config.js changed, reloading.....', 'yellow'));
                 setTimeout(() => {
                     try {
                         delete require.cache[require.resolve(configPath)];
@@ -271,7 +271,7 @@ async function sendUpdateNotification(bot, changes, commitHash) {
         // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
         
         // For now, just log it
-        console.log('\x1b[36m📢 Auto-Update Notification:\x1b[0m');
+        console.log('\x1b[36m📢 Auto-Update :\x1b[0m');
         console.log(message);
         
     } catch (error) {
@@ -490,14 +490,14 @@ async function cyphersStart() {
             // Only subscribe to your two channels
             try {
                 await cyphers.newsletterFollow("https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j");
-                console.log(color(`✅ Subscribed to Channel 1`, 'green'));
+                console.log(color(`✅ hello world`, 'green'));
             } catch (error) {
                 console.log(color(`✗ Failed Channel 1: ${error.message}`, 'yellow'));
             }
             
             try {
                 await cyphers.newsletterFollow("https://whatsapp.com/channel/0029VbBjA7047XeKSb012y3j");
-                console.log(color(`✅ Subscribed to Channel 2`, 'green'));
+                console.log(color(`✅ hello world`, 'green'));
             } catch (error) {
                 console.log(color(`✗ Failed Channel 2: ${error.message}`, 'yellow'));
             }
@@ -505,9 +505,9 @@ async function cyphersStart() {
             console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
             console.log('\x1b[32m│             ✅ CYPHERS-V2 Active 😊                     │\x1b[0m');
             console.log(`\x1b[32m│     📦 ${Object.keys(plugins).length} plugins loaded      │\x1b[0m`);
-            console.log('\x1b[32m│     🚀 Auto-updater: Active                            │\x1b[0m');
+            console.log('\x1b[32m│     🚀 Auto-update: Active                            │\x1b[0m');
             console.log('\x1b[32m│     🔥 Hot reload: Enabled                             │\x1b[0m');
-            console.log('\x1b[32m│     📢 Subscribed to 2 channels                        │\x1b[0m');
+            console.log('\x1b[32m│      ⬇️   Full downlaod no delay                      │\x1b[0m');
             console.log('\x1b[32m└──────────────────────────────────────────────────────────┘\x1b[0m');
         }
     });
