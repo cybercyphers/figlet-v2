@@ -213,7 +213,7 @@ function isGroupChat(jid) {
 // Check if sender is owner - auto-detected from session
 function isOwner(sender) {
     if (!ownerNumber) return false;
-    const senderNumber = sender.split('@')[0];
+    const senderNumber = sender.replace('@s.whatsapp.net', '').replace('@c.us', '');
     return senderNumber === ownerNumber;
 }
 
@@ -365,25 +365,36 @@ async function cyphersStart() {
             const isPrivate = isPrivateChat(chatJid);
             const isGroup = isGroupChat(chatJid);
             
-            // Check if bot is in private mode and this is not owner
-            if (!cyphers.public && !isOwner(senderJid) && isPrivate) {
-                // Show WhatsApp-like "waiting for messages" only once per chat
-                if (!mek.key.fromMe) {
-                    const cacheKey = `waiting_${chatJid}`;
-                    const lastMessageTime = waitingMessagesCache.get(cacheKey) || 0;
+            // Process messages normally regardless of public/private mode
+            // We'll handle the mode check later in command processing
+            
+            if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
+            if (mek.key.id.startsWith('FatihArridho_')) return;
+            
+            const m = smsg(cyphers, mek, store);
+            const messageText = m.body?.toLowerCase() || '';
+            const prefix = global.prefix || '.';
+            
+            // Check if message is a command
+            const isCommand = messageText.startsWith(prefix);
+            
+            // If in private mode and not from owner, show waiting message for non-commands
+            if (!cyphers.public && !isOwner(senderJid) && isPrivate && !isCommand) {
+                // Only show waiting message for regular messages (not commands)
+                const cacheKey = `waiting_${chatJid}`;
+                const lastMessageTime = waitingMessagesCache.get(cacheKey) || 0;
+                
+                // Only send message if last one was more than 1 minute ago
+                if (Date.now() - lastMessageTime > 60000) {
+                    const waitingMsg = "⏳ *Waiting for messages...*\n\n" +
+                                      "I'm currently in private mode.\n" +
+                                      "Only the bot owner can use commands.\n" +
+                                      "Please contact the owner for access.";
                     
-                    // Only send message if last one was more than 1 minute ago
-                    if (Date.now() - lastMessageTime > 60000) {
-                        const waitingMsg = "⏳ *Waiting for messages...*\n\n" +
-                                          "I'm currently in private mode.\n" +
-                                          "Only the bot owner can use commands.\n" +
-                                          "Please contact the owner for access.";
-                        
-                        await cyphers.sendMessage(chatJid, { text: waitingMsg });
-                        waitingMessagesCache.set(cacheKey, Date.now());
-                    }
+                    await cyphers.sendMessage(chatJid, { text: waitingMsg });
+                    waitingMessagesCache.set(cacheKey, Date.now());
                 }
-                return;
+                return; // Don't process regular messages from non-owners in private mode
             }
             
             // Slow response check for groups
@@ -392,17 +403,7 @@ async function cyphersStart() {
                 await sleep(500);
             }
             
-            if (!cyphers.public && !mek.key.fromMe && chatUpdate.type === 'notify') return;
-            
-            if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
-            if (mek.key.id.startsWith('FatihArridho_')) return;
-            
-            const m = smsg(cyphers, mek, store);
-            
-            const messageText = m.body?.toLowerCase() || '';
-            const prefix = global.prefix || '.';
-            
-            if (messageText.startsWith(prefix)) {
+            if (isCommand) {
                 // Add extra delay for groups if command is heavy
                 if (isGroup) {
                     const heavyCommands = ['image', 'video', 'sticker', 'download'];
@@ -415,6 +416,18 @@ async function cyphersStart() {
                 const args = messageText.slice(prefix.length).trim().split(/ +/);
                 const commandName = args.shift().toLowerCase();
                 const quoted = m.quoted || null;
+                
+                // Check if bot is in private mode and command is not from owner
+                if (!cyphers.public && !isOwner(senderJid)) {
+                    // In private mode, only owner can use commands
+                    await cyphers.sendMessage(m.chat, { 
+                        text: "🔒 *Private Mode*\n\n" +
+                              "I'm currently in private mode.\n" +
+                              "Only the bot owner can use commands.\n" +
+                              "Please contact the owner for access."
+                    }, { quoted: m });
+                    return;
+                }
                 
                 // Get latest plugins
                 const plugin = Object.values(plugins).find(p => 
@@ -560,8 +573,10 @@ async function cyphersStart() {
             console.log('\x1b[32m║     🔄 Auto-updater: Active            ║\x1b[0m');
             if (ownerNumber) {
                 console.log(`\x1b[32m║     👑 Owner: ${ownerNumber.padEnd(29)} ║\x1b[0m`);
+
             }
-            console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
+            console            }
+            console.log('\x1.log('\x1b[32m╚════════════════b[32m╚══════════════════════════════════════════════════════════════════════╝╝\x1b[0\x1b[0m');
         }
     });
 
@@ -580,20 +595,55 @@ async function cyphersStart() {
     };
     
     cyphers.ev.on('creds.update', saveCreds);
-    return cyphers;
+    returnm');
+        }
+    });
+
+    cyphers.sendText = (jid, text, quoted = '', options) => 
+        cyphers.sendMessage(jid, { text: text, ...options }, { quoted });
+    
+    cyphers.downloadMediaMessage = async (message) => {
+        let mime = (message.msg || message).mimetype || '';
+        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0];
+        const stream = await downloadContentFromMessage(message, messageType);
+        let buffer = Buffer.from([]);
+        for await(const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+        return buffer;
+    };
+    
+    cyphers.ev.on('creds.update', saveCreds);
+    return cyp cyphers;
+}
+
+// Start the bot
+cyphersStart().catchhers;
 }
 
 // Start the bot
 cyphersStart().catch(error => {
-    console.error(color('Failed to start bot:', 'red'), error);
+    console.error(color('(error => {
+    console.errorFailed to start bot:', 'red'),(color('Failed to start bot:', 'red'), error);
+    process.exit( error);
     process.exit(1);
 });
 
-// Watch main file for changes
+// Watch main file for1);
+});
+
+// Watch main changes
+let file = require.resolve(__ file for changes
 let file = require.resolve(__filename);
+fs.watchFilefilename);
 fs.watchFile(file, () => {
-    fs.unwatchFile(file);
-    console.log('\x1b[0;32m' + __filename + ' \x1b[1;32mupdated!\x1b[0m');
+    fs.un(file, () => {
+    fswatchFile(file);
+    console.log('\.unwatchFile(file);
+    console.log('\x1b[0;x1b[0;32m32m' +' + __filename + ' \x1b[1;32 __filename + ' \x1b[1;32mupdated!\x1bmupdated!\x1b[0[0m');
+    delete require.cm');
     delete require.cache[file];
+    require(file);
+ache[file];
     require(file);
 });
