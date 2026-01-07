@@ -52,14 +52,13 @@ let pluginWatchers = {};
 let loadedPlugins = new Set();
 let autoUpdater = null;
 let cyphersInstance = null;
-let ownerNumber = null; // Will be auto-detected
 
 // Check if this is a restart after auto-update
 if (process.env.CYPHERS_AUTO_UPDATED === 'true') {
-    console.log('\x1b[32m╔═══════════════════════════════════════════╗\x1b[0m');
-    console.log('\x1b[32m║        ✅ VERIFIED UPDATE                 ║\x1b[0m');
-    console.log('\x1b[32m║        Running latest version now 🔥     ║\x1b[0m');
-    console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
+    console.log('\x1b[32mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
+    console.log('\x1b[32mâ        â VERIFIED UPDATE     â\x1b[0m');
+    console.log('\x1b[32mâ        Running latest version now ð¥       â\x1b[0m');
+    console.log('\x1b[32mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
     delete process.env.CYPHERS_AUTO_UPDATED;
 }
 
@@ -94,17 +93,17 @@ function loadPlugins(reload = false) {
             const plugin = require(pluginPath);
             
             if (!plugin.name || !plugin.execute) {
-                console.log(color(`✗ Invalid plugin structure in ${file}`, 'red'));
+                console.log(color(`â Invalid plugin structure in ${file}`, 'red'));
                 continue;
             }
             
             plugins[plugin.name] = plugin;
             
             if (!loadedPlugins.has(plugin.name)) {
-                console.log(color(`✓ Plugin loaded: ${plugin.name}`, 'green'));
+                console.log(color(`â Plugin loaded: ${plugin.name}`, 'green'));
                 loadedPlugins.add(plugin.name);
             } else if (reload) {
-                console.log(color(`🔄 Fully loaded: ${plugin.name}`, 'cyan'));
+                console.log(color(`ð Fully loaded: ${plugin.name}`, 'cyan'));
             }
             
             // Set up file watcher for hot reload
@@ -112,7 +111,7 @@ function loadPlugins(reload = false) {
                 pluginWatchers[file] = fs.watch(pluginPath, (eventType) => {
                     if (eventType === 'change') {
                         setTimeout(() => {
-                            console.log(color(`🔄 ${file} changed, reloading...`, 'yellow'));
+                            console.log(color(`ð ${file} changed, reloading...`, 'yellow'));
                             loadPlugins(true);
                         }, 100);
                     }
@@ -120,7 +119,7 @@ function loadPlugins(reload = false) {
             }
             
         } catch (error) {
-            console.log(color(`✗ Failed to load ${file}: ${error.message}`, 'red'));
+            console.log(color(`â Failed to load ${file}: ${error.message}`, 'red'));
         }
     }
 }
@@ -138,7 +137,7 @@ function setupHotReload() {
             fs.watch(filePath, (eventType) => {
                 if (eventType === 'change') {
                     setTimeout(() => {
-                        console.log(color(`🔄 ${path.basename(filePath)} changed, reloading...`, 'yellow'));
+                        console.log(color(`ð ${path.basename(filePath)} changed, reloading...`, 'yellow'));
                         
                         // Clear require cache
                         delete require.cache[require.resolve(filePath)];
@@ -146,9 +145,9 @@ function setupHotReload() {
                         // Reload the file
                         try {
                             require(filePath);
-                            console.log(color(`✅ ${path.basename(filePath)} reloaded`, 'green'));
+                            console.log(color(`â ${path.basename(filePath)} reloaded`, 'green'));
                         } catch (error) {
-                            console.log(color(`✗ Failed to reload ${path.basename(filePath)}: ${error.message}`, 'red'));
+                            console.log(color(`â Failed to reload ${path.basename(filePath)}: ${error.message}`, 'red'));
                         }
                     }, 100);
                 }
@@ -165,16 +164,16 @@ async function sendUpdateNotification(bot, changes, commitHash) {
         const updateCount = changes.length;
         const shortCommit = commitHash.substring(0, 8);
         
-        let message = `🚀 *CYPHERS-v2 UPDATED!*\n\n`;
-        message += `📅 *Time:* ${date}\n`;
-        message += `🔧 *Commit:* ${shortCommit}\n`;
-        message += `📊 *Files Updated:* ${updateCount}\n\n`;
+        let message = `ð *CYPHERS-v2 UPDATED!*\n\n`;
+        message += `ð *Time:* ${date}\n`;
+        message += `ð§ *Commit:* ${shortCommit}\n`;
+        message += `ð *Files Updated:* ${updateCount}\n\n`;
         
         if (changes.length > 0) {
-            message += `📝 *Recent Changes:*\n`;
+            message += `ð *Recent Changes:*\n`;
             changes.slice(0, 5).forEach(change => {
                 const filename = change.file.length > 30 ? '...' + change.file.slice(-27) : change.file;
-                message += `• ${filename} (${change.type})\n`;
+                message += `â¢ ${filename} (${change.type})\n`;
             });
             
             if (changes.length > 5) {
@@ -182,102 +181,23 @@ async function sendUpdateNotification(bot, changes, commitHash) {
             }
         }
         
-        message += `\n⚡ *What's New:*\n`;
-        message += `• Bug fixes and improvements\n`;
-        message += `• Performance enhancements\n`;
-        message += `• New features added\n\n`;
-        message += `✅ *Status:* Running latest version\n`;
-        message += `🔄 Automated and by cybercyphers`;
+        message += `\nâ¡ *What's New:*\n`;
+        message += `â¢ Bug fixes and improvements\n`;
+        message += `â¢ Performance enhancements\n`;
+        message += `â¢ New features added\n\n`;
+        message += `â *Status:* Running latest version\n`;
+        message += `ð Automated and by cybercyphers`;
         
         // You can send to specific chats here
-        // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
+         //Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
         
         // For now, just log it
-        console.log('\x1b[36m📢 Auto-Update Notification:\x1b[0m');
+        console.log('\x1b[36mð¢ Auto-Update Notification:\x1b[0m');
         console.log(message);
         
     } catch (error) {
         console.error('Failed to send update notification:', error);
     }
-}
-
-// Helper functions
-function isPrivateChat(jid) {
-    return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us');
-}
-
-function isGroupChat(jid) {
-    return jid.endsWith('@g.us');
-}
-
-// Check if sender is owner - auto-detected from session
-function isOwner(sender) {
-    if (!ownerNumber) return false;
-    const senderNumber = sender.split('@')[0];
-    return senderNumber === ownerNumber;
-}
-
-// Get owner number from session
-function getOwnerNumberFromSession() {
-    try {
-        // Check session folder
-        const sessionDir = path.join(__dirname, 'session');
-        if (fs.existsSync(sessionDir)) {
-            const files = fs.readdirSync(sessionDir);
-            for (const file of files) {
-                if (file.endsWith('.json') && file.includes('creds')) {
-                    try {
-                        const credsPath = path.join(sessionDir, file);
-                        const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-                        if (creds.me && creds.me.id) {
-                            // Extract number from id (e.g., "628123456789@s.whatsapp.net")
-                            const match = creds.me.id.match(/^(\d+)@/);
-                            if (match) {
-                                return match[1];
-                            }
-                        }
-                    } catch (e) {
-                        console.log(color('Error reading session file:', 'yellow'), e.message);
-                    }
-                }
-            }
-        }
-        return null;
-    } catch (error) {
-        console.log(color('Error getting owner number:', 'yellow'), error.message);
-        return null;
-    }
-}
-
-// Simple cache for waiting messages to avoid spam
-const waitingMessagesCache = new Map();
-
-// ========== ADDED TYPING INDICATOR SYSTEM ==========
-async function sendTypingIndicator(sock, chatJid) {
-    try {
-        await sock.sendPresenceUpdate('composing', chatJid);
-        // Keep typing indicator active for 30 seconds
-        setTimeout(async () => {
-            try {
-                await sock.sendPresenceUpdate('paused', chatJid);
-            } catch {}
-        }, 30000);
-    } catch (error) {
-        // Silent fail for typing indicator
-    }
-}
-
-// ========== ADDED MESSAGE DELIVERY SYSTEM ==========
-async function ensureMessageDelivery(sock, chatJid, messageText) {
-    // Start typing indicator immediately
-    await sendTypingIndicator(sock, chatJid);
-    
-    // Send a quick acknowledgement for commands
-    if (messageText.startsWith('.') || messageText.startsWith(global.prefix || '.')) {
-        return true; // Commands will handle their own responses
-    }
-    
-    return true;
 }
 
 async function cyphersStart() {
@@ -288,7 +208,7 @@ async function cyphersStart() {
 	const cyphers = makeWASocket({
 		printQRInTerminal: !usePairingCode,
 		syncFullHistory: false,
-		markOnlineOnConnect: true, // Keep online to prevent sync issues
+		markOnlineOnConnect: false,
 		connectTimeoutMs: 60000,
 		defaultQueryTimeoutMs: 0,
 		keepAliveIntervalMs: 10000,
@@ -332,38 +252,25 @@ async function cyphersStart() {
     cyphersInstance = cyphers;
 
     if (usePairingCode && !cyphers.authState.creds.registered) {
-        const phoneNumber = await question('Enter bot phone number 📱😏 : Example 62xxx\n');
+        const phoneNumber = await question('Enter bot phone number ð±ð : Example 62xxx\n');
         const code = await cyphers.requestPairingCode(phoneNumber, "CYPHERSS");
         console.log(`\x1b[1;33mPairing Code: ${code}\x1b[0m`);
     }
 
     store.bind(cyphers.ev);
     
-    // Auto-detect owner number
-    ownerNumber = getOwnerNumberFromSession();
-    if (ownerNumber) {
-        console.log(color(`Owner auto-detected: ${ownerNumber}`, 'green'));
-    } else if (cyphers.user && cyphers.user.id) {
-        // Extract from current connection
-        const match = cyphers.user.id.match(/^(\d+)@/);
-        if (match) {
-            ownerNumber = match[1];
-            console.log(color(`Owner detected from connection: ${ownerNumber}`, 'green'));
-        }
-    }
-    
     if (!autoUpdater) {
-        console.log('\x1b[36m╔═══════════════════════════════════════════╗\x1b[0m');
-        console.log('\x1b[36m║            STARTING UPDATE               ║\x1b[0m');
-        console.log('\x1b[36m║      🔗 Repo: cybercyphers/cyphers-v2     ║\x1b[0m');
-        console.log('\x1b[36m║      ⏱️  fully loaded                     ║\x1b[0m');
-        console.log('\x1b[36m╚═══════════════════════════════════════════╝\x1b[0m');
+        console.log('\x1b[36mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
+        console.log('\x1b[36mâ            STARTING UPDATE      â\x1b[0m');
+        console.log('\x1b[36mâ      ð Repo: cybercyphers/cyphers-v2     â\x1b[0m');
+        console.log('\x1b[36mâ      â±ï¸  fully loaded             â\x1b[0m');
+        console.log('\x1b[36mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
         
         autoUpdater = new AutoUpdater(cyphers);
         
         // Custom event handler for update notifications
         autoUpdater.onUpdateComplete = async (changes, commitHash) => {
-            console.log(color('✅ Auto-update completed successfully!', 'green'));
+            console.log(color('â Auto-update completed successfully!', 'green'));
             await sendUpdateNotification(cyphers, changes, commitHash);
         };
         
@@ -377,7 +284,6 @@ async function cyphersStart() {
     loadPlugins();
     setupHotReload();
     
-    // ========== UPDATED MESSAGE HANDLER WITH TYPING INDICATOR ==========
     cyphers.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             const mek = chatUpdate.messages[0];
@@ -389,45 +295,17 @@ async function cyphersStart() {
             
             if (mek.key && mek.key.remoteJid === 'status@broadcast') return;
             
-            const chatJid = mek.key.remoteJid;
-            const senderJid = mek.key.participant || mek.key.remoteJid;
-            const isPrivate = isPrivateChat(chatJid);
-            const isGroup = isGroupChat(chatJid);
+            if (!cyphers.public && !mek.key.fromMe && chatUpdate.type === 'notify') return;
             
-            // Check if bot is in private mode and this is not owner
-            if (!cyphers.public && !isOwner(senderJid) && isPrivate) {
-                // Show WhatsApp-like "waiting for messages" only once per chat
-                if (!mek.key.fromMe) {
-                    const cacheKey = `waiting_${chatJid}`;
-                    const lastMessageTime = waitingMessagesCache.get(cacheKey) || 0;
-                    
-                    // Only send message if last one was more than 1 minute ago
-                    if (Date.now() - lastMessageTime > 60000) {
-                        // ========== ADDED TYPING BEFORE RESPONSE ==========
-                        await sendTypingIndicator(cyphers, chatJid);
-                        await sleep(1000);
-                        
-                        const waitingMsg = "⏳ *Waiting for messages...*\n\n" +
-                                          "I'm currently in private mode.\n" +
-                                          "Only the bot owner can use commands.\n" +
-                                          "Please contact the owner for access.";
-                        
-                        await cyphers.sendMessage(chatJid, { text: waitingMsg });
-                        waitingMessagesCache.set(cacheKey, Date.now());
-                    }
-                }
-                return;
-            }
+            if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
+            if (mek.key.id.startsWith('FatihArridho_')) return;
             
             const m = smsg(cyphers, mek, store);
+            
             const messageText = m.body?.toLowerCase() || '';
             const prefix = global.prefix || '.';
             
-            // ========== ADDED IMMEDIATE TYPING INDICATOR ==========
-            await ensureMessageDelivery(cyphers, chatJid, messageText);
-            
             if (messageText.startsWith(prefix)) {
-                // Process command immediately with typing active
                 const args = messageText.slice(prefix.length).trim().split(/ +/);
                 const commandName = args.shift().toLowerCase();
                 const quoted = m.quoted || null;
@@ -459,22 +337,16 @@ async function cyphersStart() {
                     } catch (error) {
                         console.log(color(`Error in ${plugin.name}: ${error.message}`, 'red'));
                         await cyphers.sendMessage(m.chat, { 
-                            text: `❌ Error: ${error.message}` 
+                            text: `â Error: ${error.message}` 
                         }, { quoted: m });
                     }
                 } else {
-                    // Command not found - immediate response
-                    let commandList = Object.values(plugins);
-                    if (isGroup) {
-                        commandList = commandList.slice(0, 3); // Show only first 3 for speed
-                    }
-                    
-                    const commandText = commandList
+                    const commandList = Object.values(plugins)
                         .map(p => `${prefix}${p.name} - ${p.description || ''}`)
                         .join('\n');
                     
                     await cyphers.sendMessage(m.chat, { 
-                        text: `❓ *${commandName}* not found!\n\n📋 Quick commands:\n${commandText || 'No commands loaded'}\n\nType ${prefix}help for full list` 
+                        text: `â Command not found!\n\nð Commands:\n${commandList || 'No commands loaded'}` 
                     }, { quoted: m });
                 }
             }
@@ -512,14 +384,7 @@ async function cyphersStart() {
     global.idch12 = "120363403578572630@newsletter"
     global.idch13 = "120363418736784979@newsletter"
 
-    // Set public/private mode (can be controlled from config)
-    cyphers.public = global.status !== undefined ? global.status : true;
-    
-    if (!cyphers.public) {
-        console.log(color('Mode: PRIVATE (Only owner can use commands)', 'yellow'));
-    } else {
-        console.log(color('Mode: PUBLIC (Everyone can use commands)', 'green'));
-    }
+    cyphers.public = global.status || true;
 
     cyphers.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
@@ -567,16 +432,11 @@ async function cyphersStart() {
                 }
             }
             
-            console.log('\x1b[32m╔═══════════════════════════════════════════╗\x1b[0m');
-            console.log('\x1b[32m║             ✅ CYPHERS-V2 Active 😊     ║\x1b[0m');
-            console.log(`\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded      ║\x1b[0m`);
-            console.log(`\x1b[32m║     🚀 Mode: ${cyphers.public ? 'Public' : 'Private'.padEnd(22)} ║\x1b[0m`);
-            console.log('\x1b[32m║     🔄 Auto-updater: Active            ║\x1b[0m');
-            console.log('\x1b[32m║     ⚡ Typing: Active                   ║\x1b[0m');
-            if (ownerNumber) {
-                console.log(`\x1b[32m║     👑 Owner: ${ownerNumber.padEnd(29)} ║\x1b[0m`);
-            }
-            console.log('\x1b[32m╚═══════════════════════════════════════════╝\x1b[0m');
+            console.log('\x1b[32mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
+            console.log('\x1b[32mâ             â CYPHERS-V2 Active ð         â\x1b[0m');
+            console.log('\x1b[32mâ     ð¦ ${Object.keys(plugins).length} plugins loaded      â\x1b[0m');
+            console.log('\x1b[32mâ     ð Auto-updater: Active              â\x1b[0m');
+            console.log('\x1b[32mâââââââââââââââââââââââââââââââââââââââââââââ\x1b[0m');
         }
     });
 
