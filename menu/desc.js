@@ -100,7 +100,7 @@ async function getBotStats(sock, msg) {
   const cpuCores = os.cpus().length;
   const cpuModel = os.cpus()[0].model;
 
-  let menuText = `╭───「 🔮 CYPHER STATS 」───⊷
+  let menuText = `╭───「 🔮 CYPHERS-V2 STATS 」───⊷
 │ ┌──────────────
 │ │ 👤 User : ${msg.pushName || 'User'}
 │ │ 🕐 Time : ${time}
