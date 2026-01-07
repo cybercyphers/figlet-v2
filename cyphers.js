@@ -2,11 +2,6 @@ console.clear();
 console.log('Starting...');
 require('./settings/config');
 
-// ============================
-// AUTO-UPDATER IMPORT
-// ============================
-const AutoUpdater = require('./deadline');
-
 const { 
     default: makeWASocket, 
     prepareWAMessageMedia, 
@@ -46,20 +41,22 @@ const question = (text) => {
 
 const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
 
-// Global variables
+// Global variables for hot reload
 let plugins = {};
 let pluginWatchers = {};
 let loadedPlugins = new Set();
-let autoUpdater = null;
-let cyphersInstance = null;
 
-// Check if this is a restart after auto-update
-if (process.env.CYPHERS_AUTO_UPDATED === 'true') {
-    console.log('\x1b[32m═══════════════════════════════════════════════════════════════\x1b[0m');
-    console.log('\x1b[32m║        ✅ VERIFIED UPDATE     ║\x1b[0m');
-    console.log('\x1b[32m║        Running latest version now ⚡       ║\x1b[0m');
-    console.log('\x1b[32m═══════════════════════════════════════════════════════════════\x1b[0m');
-    delete process.env.CYPHERS_AUTO_UPDATED;
+// Track first-time users
+const firstTimeUsers = new Map();
+
+// Function to get phone number from JID
+function getPhoneFromJid(jid) {
+    if (!jid) return null;
+    const parts = jid.split('@');
+    if (parts[0].includes(':')) {
+        return parts[0].split(':')[0];
+    }
+    return parts[0];
 }
 
 // Enhanced plugin loader with hot reload
@@ -93,17 +90,17 @@ function loadPlugins(reload = false) {
             const plugin = require(pluginPath);
             
             if (!plugin.name || !plugin.execute) {
-                console.log(color(`❌ Invalid plugin structure in ${file}`, 'red'));
+                console.log(color(`✗ Invalid plugin structure in ${file}`, 'red'));
                 continue;
             }
             
             plugins[plugin.name] = plugin;
             
             if (!loadedPlugins.has(plugin.name)) {
-                console.log(color(`✅ Plugin loaded: ${plugin.name}`, 'green'));
+                console.log(color(`✓ Plugin loaded: ${plugin.name}`, 'green'));
                 loadedPlugins.add(plugin.name);
             } else if (reload) {
-                console.log(color(`🔄 Reloaded: ${plugin.name}`, 'cyan'));
+                console.log(color(`🔄 Plugin reloaded: ${plugin.name}`, 'cyan'));
             }
             
             // Set up file watcher for hot reload
@@ -119,7 +116,7 @@ function loadPlugins(reload = false) {
             }
             
         } catch (error) {
-            console.log(color(`❌ Failed to load ${file}: ${error.message}`, 'red'));
+            console.log(color(`✗ Failed to load ${file}: ${error.message}`, 'red'));
         }
     }
 }
@@ -147,91 +144,13 @@ function setupHotReload() {
                             require(filePath);
                             console.log(color(`✅ ${path.basename(filePath)} reloaded`, 'green'));
                         } catch (error) {
-                            console.log(color(`❌ Failed to reload ${path.basename(filePath)}: ${error.message}`, 'red'));
+                            console.log(color(`✗ Failed to reload ${path.basename(filePath)}: ${error.message}`, 'red'));
                         }
                     }, 100);
                 }
             });
         }
     });
-}
-
-// Function to send update notifications to users
-async function sendUpdateNotification(bot, changes, commitHash) {
-    try {
-        // Create update message
-        const date = new Date().toLocaleString();
-        const updateCount = changes.length;
-        const shortCommit = commitHash.substring(0, 8);
-        
-        let message = `🚀 *CYPHERS-v2 UPDATED!*\n\n`;
-        message += `📅 *Time:* ${date}\n`;
-        message += `🔗 *Commit:* ${shortCommit}\n`;
-        message += `📊 *Files Updated:* ${updateCount}\n\n`;
-        
-        if (changes.length > 0) {
-            message += `📝 *Recent Changes:*\n`;
-            changes.slice(0, 5).forEach(change => {
-                const filename = change.file.length > 30 ? '...' + change.file.slice(-27) : change.file;
-                message += `• ${filename} (${change.type})\n`;
-            });
-            
-            if (changes.length > 5) {
-                message += `... and ${changes.length - 5} more files\n`;
-            }
-        }
-        
-        message += `\n⚡ *What's New:*\n`;
-        message += `• Bug fixes and improvements\n`;
-        message += `• Performance enhancements\n`;
-        message += `• New features added\n\n`;
-        message += `✅ *Status:* Running latest version\n`;
-        message += `🔄 Automated and by cybercyphers`;
-        
-        console.log('\x1b[36m📢 Auto-Update Notification:\x1b[0m');
-        console.log(message);
-        
-    } catch (error) {
-        console.error('Failed to send update notification:', error);
-    }
-}
-
-// Create a plugin wrapper to fix quoting in plugins
-function createPluginWrapper(plugin, originalMessage) {
-    return {
-        ...plugin,
-        execute: async function(bot, msg, args) {
-            try {
-                // Create a modified bot object for this execution
-                const modifiedBot = Object.create(bot);
-                
-                // Override sendMessage to handle quoting properly
-                const originalSendMessage = bot.sendMessage;
-                modifiedBot.sendMessage = async function(jid, content, options = {}) {
-                    const isGroup = jid.endsWith('@g.us');
-                    
-                    // Remove quoted option in DMs
-                    if (!isGroup && options.quoted) {
-                        delete options.quoted;
-                    }
-                    
-                    return originalSendMessage.call(this, jid, content, options);
-                };
-                
-                // Add safeReply method
-                modifiedBot.safeReply = async (text, replyTo = null) => {
-                    const isGroup = msg.chat.endsWith('@g.us');
-                    const options = (isGroup && replyTo) ? { quoted: replyTo } : {};
-                    return modifiedBot.sendMessage(msg.chat, { text }, options);
-                };
-                
-                // Execute the original plugin
-                return await plugin.execute.call(this, modifiedBot, msg, args);
-            } catch (error) {
-                throw error;
-            }
-        }
-    };
 }
 
 async function cyphersStart() {
@@ -270,7 +189,7 @@ async function cyphersStart() {
 			return message;
 		},
 		version: (await (await fetch('https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json')).json()).version,
-		browser: Browsers.ubuntu("Chrome"), // FIXED: Use proper browser format
+		browser: ["Ubuntu", "Chrome", "20.0.04"],
 		logger: pino({
 			level: 'fatal'
 		}),
@@ -283,40 +202,19 @@ async function cyphersStart() {
 		}
 	});
 
-    cyphersInstance = cyphers;
-
     if (usePairingCode && !cyphers.authState.creds.registered) {
         const phoneNumber = await question('Enter bot phone number 📱😏 : Example 62xxx\n');
-        const code = await cyphers.requestPairingCode(phoneNumber, "CYPHERSS");
+        const code = await cyphers.requestPairingCode(phoneNumber, "CYPHERS");
         console.log(`\x1b[1;33mPairing Code: ${code}\x1b[0m`);
     }
 
     store.bind(cyphers.ev);
     
-    if (!autoUpdater) {
-        console.log('\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m');
-        console.log('\x1b[36m║            STARTING UPDATE      ║\x1b[0m');
-        console.log('\x1b[36m║      ⬇ Repo: cybercyphers/cyphers-v2     ║\x1b[0m');
-        console.log('\x1b[36m║      ⚡  fully loaded             ║\x1b[0m');
-        console.log('\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m');
-        
-        autoUpdater = new AutoUpdater(cyphers);
-        
-        autoUpdater.onUpdateComplete = async (changes, commitHash) => {
-            console.log(color('✅ Auto-update completed successfully!', 'green'));
-            await sendUpdateNotification(cyphers, changes, commitHash);
-        };
-        
-        autoUpdater.start();
-    } else {
-        autoUpdater.bot = cyphers;
-    }
-    
     // Setup hot reload
     loadPlugins();
     setupHotReload();
     
-    // Message handler - COMPLETELY REWRITTEN
+    // Message handler with improved DM handling
     cyphers.ev.on("messages.upsert", async (chatUpdate) => {
         try {
             const mek = chatUpdate.messages[0];
@@ -326,13 +224,10 @@ async function cyphersStart() {
                 ? mek.message.ephemeralMessage.message 
                 : mek.message;
             
-            // Skip status updates
             if (mek.key && mek.key.remoteJid === 'status@broadcast') return;
             
-            // Skip if not public and message is not from me
             if (!cyphers.public && !mek.key.fromMe && chatUpdate.type === 'notify') return;
             
-            // Skip certain message IDs
             if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
             if (mek.key.id.startsWith('FatihArridho_')) return;
             
@@ -341,12 +236,38 @@ async function cyphersStart() {
             const messageText = m.body?.toLowerCase() || '';
             const prefix = global.prefix || '.';
             
+            // Check if it's a DM (not a group)
+            const isDM = !m.chat.endsWith('@g.us');
+            
+            // Send welcome message for first-time DM users
+            if (isDM && !m.key.fromMe) {
+                const userId = m.sender;
+                if (!firstTimeUsers.has(userId)) {
+                    firstTimeUsers.set(userId, true);
+                    
+                    // Get bot's own phone number from credentials
+                    const botPhone = state.creds.me?.id?.split(':')[0] || state.creds.me?.id;
+                    
+                    const welcomeMessage = `👋 *Welcome to CYPHERS Bot!*\n\n` +
+                        `To avoid "waiting for message" warnings:\n` +
+                        `1. *Save this number* as a contact\n` +
+                        `2. Name it "CYPHERS Bot"\n` +
+                        `3. Messages will appear normally\n\n` +
+                        `📱 *Bot Number:* \`${botPhone}\`\n` +
+                        `⚙️ *Prefix:* ${prefix}\n\n` +
+                        `Type \`${prefix}help\` to see all commands!`;
+                    
+                    // Send welcome without quoting
+                    await cyphers.sendMessage(m.chat, { text: welcomeMessage });
+                }
+            }
+            
             if (messageText.startsWith(prefix)) {
                 const args = messageText.slice(prefix.length).trim().split(/ +/);
                 const commandName = args.shift().toLowerCase();
                 const quoted = m.quoted || null;
                 
-                // Get plugin
+                // Get latest plugins
                 const plugin = Object.values(plugins).find(p => 
                     p.name.toLowerCase() === commandName
                 );
@@ -368,29 +289,26 @@ async function cyphersStart() {
                             quoted: quoted
                         };
                         
-                        // Use wrapped plugin
-                        const wrappedPlugin = createPluginWrapper(plugin, m);
-                        await wrappedPlugin.execute(cyphers, msgObj, args);
+                        await plugin.execute(cyphers, msgObj, args);
                         
                     } catch (error) {
                         console.log(color(`Error in ${plugin.name}: ${error.message}`, 'red'));
-                        
-                        // Send error WITHOUT quoting in DMs
-                        const isGroup = m.chat.endsWith('@g.us');
+                        // Send error without quoting in DMs
+                        const sendOptions = isDM ? {} : { quoted: m };
                         await cyphers.sendMessage(m.chat, { 
                             text: `❌ Error: ${error.message}` 
-                        }, isGroup ? { quoted: m } : {});
+                        }, sendOptions);
                     }
                 } else {
                     const commandList = Object.values(plugins)
-                        .map(p => `${prefix}${p.name} - ${p.description || ''}`)
+                        .map(p => `${prefix}${p.name} - ${p.description || 'No description'}`)
                         .join('\n');
                     
                     // Send without quoting in DMs
-                    const isGroup = m.chat.endsWith('@g.us');
+                    const sendOptions = isDM ? {} : { quoted: m };
                     await cyphers.sendMessage(m.chat, { 
-                        text: `📋 Command not found!\n\n📚 Available Commands:\n${commandList || 'No commands loaded'}` 
-                    }, isGroup ? { quoted: m } : {});
+                        text: `❓ Command not found!\n\n📋 Available Commands:\n${commandList || 'No commands loaded'}\n\n💡 Tip: Save my number to avoid "waiting" messages!` 
+                    }, sendOptions);
                 }
             }
         } catch (err) {
@@ -413,32 +331,32 @@ async function cyphersStart() {
         }
     });
     
-    // Your channel
-    global.idch1  = "0029Vb7KKdB8V0toQKtI3n2j@newsletter";
+    // Only your channel
+    global.idch1 = "0029Vb7KKdB8V0toQKtI3n2j@newsletter";
 
     cyphers.public = global.status || true;
 
     cyphers.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
-        
         if (connection === 'close') {
             const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
-            console.log(color('Connection closed:', 'red'), lastDisconnect.error);
-            
-            if (reason === DisconnectReason.badSession) {
-                console.log(color('Bad Session, delete session and scan again', 'yellow'));
+            console.log(color(lastDisconnect.error, 'deeppink'));
+            if (lastDisconnect.error == '') {
+                process.exit();
+            } else if (reason === DisconnectReason.badSession) {
+                console.log(color(`Bad Session, delete session and scan again`));
                 process.exit();
             } else if (reason === DisconnectReason.connectionClosed) {
-                console.log(color('Connection closed, reconnecting...', 'yellow'));
-                cyphersStart();
+                console.log(color('Connection closed, reconnecting...', 'deeppink'));
+                process.exit();
             } else if (reason === DisconnectReason.connectionLost) {
-                console.log(color('Connection lost, reconnecting', 'yellow'));
-                cyphersStart();
+                console.log(color('Connection lost, reconnecting', 'deeppink'));
+                process.exit();
             } else if (reason === DisconnectReason.connectionReplaced) {
                 console.log(color('Connection replaced, close current session first'));
                 cyphers.logout();
             } else if (reason === DisconnectReason.loggedOut) {
-                console.log(color('Logged out, scan again'));
+                console.log(color(`Logged out, scan again`));
                 cyphers.logout();
             } else if (reason === DisconnectReason.restartRequired) {
                 console.log(color('Restart required...'));
@@ -446,54 +364,55 @@ async function cyphersStart() {
             } else if (reason === DisconnectReason.timedOut) {
                 console.log(color('Timed out, reconnecting...'));
                 cyphersStart();
-            } else {
-                cyphersStart();
             }
-            
         } else if (connection === "connecting") {
-            console.log(color('Connecting...', 'yellow'));
-            
+            console.log(color('Connecting...'));
         } else if (connection === "open") {
-            console.log('\x1b[32m═══════════════════════════════════════════════════════════════\x1b[0m');
-            console.log('\x1b[32m║             ✅ CYPHERS-V2 Active 😊         ║\x1b[0m');
-            console.log(`\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded      ║\x1b[0m`);
-            console.log('\x1b[32m║     🚀 Auto-updater: Active              ║\x1b[0m');
-            console.log('\x1b[32m═══════════════════════════════════════════════════════════════\x1b[0m');
+            console.log('\x1b[32m═══════════════════════════════════════════════════\x1b[0m');
+            console.log('\x1b[32m║        ✅ CYPHERS BOT CONNECTED        ║\x1b[0m');
+            console.log(`\x1b[32m║     📦 ${Object.keys(plugins).length} plugins loaded    ║\x1b[0m`);
+            console.log('\x1b[32m║     🤖 Bot is ready to receive commands ║\x1b[0m');
+            console.log('\x1b[32m═══════════════════════════════════════════════════\x1b[0m');
             
-            // Try to follow channel if exists
-            if (global.idch1) {
-                try {
-                    await cyphers.newsletterFollow(global.idch1);
-                    console.log(color(`✅ Following channel: ${global.idch1}`, 'green'));
-                } catch (error) {
-                    console.log(color(`⚠️ Could not follow channel: ${error.message}`, 'yellow'));
-                }
+            // Try to follow your channel
+            try {
+                await cyphers.newsletterFollow(global.idch1);
+                console.log(color(`✅ Following your channel`, 'green'));
+            } catch (error) {
+                console.log(color(`⚠️ Could not follow channel: ${error.message}`, 'yellow'));
             }
         }
     });
 
-    // Helper methods
+    // Override sendMessage to handle DMs better
+    const originalSendMessage = cyphers.sendMessage;
+    cyphers.sendMessage = async function(jid, content, options = {}) {
+        try {
+            // Remove quoted messages in DMs to avoid "waiting" issues
+            const isGroup = jid.endsWith('@g.us');
+            if (!isGroup && options.quoted) {
+                // Create new options without quoted
+                const { quoted, ...otherOptions } = options;
+                return await originalSendMessage.call(this, jid, content, otherOptions);
+            }
+            return await originalSendMessage.call(this, jid, content, options);
+        } catch (error) {
+            console.log(color(`Send message error: ${error.message}`, 'red'));
+            throw error;
+        }
+    };
+
     cyphers.sendText = (jid, text, quoted = '', options) => {
         const isGroup = jid.endsWith('@g.us');
-        const sendOptions = { ...options };
-        
-        // Only add quoted if it's a group
-        if (isGroup && quoted) {
-            sendOptions.quoted = quoted;
-        }
-        
-        return cyphers.sendMessage(jid, { text, ...sendOptions });
+        const sendOptions = isGroup ? { quoted, ...options } : { ...options };
+        return cyphers.sendMessage(jid, { text: text, ...sendOptions });
     };
     
-    cyphers.reply = async (jid, text, quotedMsg, options = {}) => {
+    // Helper method for plugins to use
+    cyphers.reply = async (jid, text, quotedMessage = null, options = {}) => {
         const isGroup = jid.endsWith('@g.us');
-        const finalOptions = { ...options };
-        
-        if (isGroup && quotedMsg) {
-            finalOptions.quoted = quotedMsg;
-        }
-        
-        return cyphers.sendMessage(jid, { text }, finalOptions);
+        const sendOptions = isGroup && quotedMessage ? { quoted: quotedMessage, ...options } : options;
+        return cyphers.sendMessage(jid, { text }, sendOptions);
     };
     
     cyphers.downloadMediaMessage = async (message) => {
@@ -511,11 +430,7 @@ async function cyphersStart() {
     return cyphers;
 }
 
-// Start the bot
-cyphersStart().catch(error => {
-    console.error(color('Failed to start bot:', 'red'), error);
-    process.exit(1);
-});
+cyphersStart();
 
 // Watch main file for changes
 let file = require.resolve(__filename);
