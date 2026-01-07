@@ -37,6 +37,7 @@ class SilentAutoUpdater {
         this.isUpdating = false;
         this.isMonitoring = false;
         this.lastCommit = null;
+        this.onUpdateComplete = null; // Callback for update completion
         
         console.log('🔗 Auto-Updater: Initializing...');
         this.initializeFileHashes();
@@ -116,9 +117,13 @@ class SilentAutoUpdater {
                 
                 console.log(`📦 Auto-Updater: ${updated} updated, ${added} added, ${deleted} deleted`);
                 
-                setTimeout(() => {
-                    this.restartSilently();
-                }, 2000);
+                // Call update complete callback if set
+                if (this.onUpdateComplete && typeof this.onUpdateComplete === 'function') {
+                    this.onUpdateComplete(changes, newCommit);
+                }
+                
+                // Trigger real-time module reload without restart
+                this.reloadModifiedModules(changes);
             } else {
                 this.cleanupTemp(tempDir);
                 this.lastCommit = newCommit;
@@ -172,19 +177,22 @@ class SilentAutoUpdater {
                         if (repoHash !== localHash) {
                             changes.push({
                                 file: relativePath,
-                                type: 'UPDATED'
+                                type: 'UPDATED',
+                                path: targetPath
                             });
                         }
                     } catch {
                         changes.push({
                             file: relativePath,
-                            type: 'UPDATED'
+                            type: 'UPDATED',
+                            path: targetPath
                         });
                     }
                 } else {
                     changes.push({
                         file: relativePath,
-                        type: 'NEW'
+                        type: 'NEW',
+                        path: targetPath
                     });
                 }
             } catch {}
@@ -200,7 +208,8 @@ class SilentAutoUpdater {
             if (!repoFileSet.has(relativePath)) {
                 changes.push({
                     file: relativePath,
-                    type: 'DELETED'
+                    type: 'DELETED',
+                    path: localFile
                 });
             }
         }
@@ -227,6 +236,11 @@ class SilentAutoUpdater {
                         
                         const hash = crypto.createHash('sha256').update(content).digest('hex');
                         this.fileHashes.set(change.file, hash);
+                        
+                        // Clear require cache for this file
+                        if (require.cache[localPath]) {
+                            delete require.cache[localPath];
+                        }
                         break;
                         
                     case 'DELETED':
@@ -234,10 +248,67 @@ class SilentAutoUpdater {
                             fs.unlinkSync(localPath);
                             this.fileHashes.delete(change.file);
                             this.removeEmptyDirs(path.dirname(localPath));
+                            
+                            // Clear require cache for deleted file
+                            if (require.cache[localPath]) {
+                                delete require.cache[localPath];
+                            }
                         }
                         break;
                 }
             } catch {}
+        }
+    }
+    
+    // Reload modules that were modified
+    reloadModifiedModules(changes) {
+        const modifiedFiles = changes.filter(c => c.type === 'UPDATED' || c.type === 'NEW');
+        
+        for (const change of modifiedFiles) {
+            const filePath = change.path;
+            
+            // Skip if file doesn't exist
+            if (!fs.existsSync(filePath)) continue;
+            
+            // Get file extension
+            const ext = path.extname(filePath);
+            
+            // Only reload JavaScript files
+            if (ext === '.js' || ext === '.cjs' || ext === '.mjs') {
+                try {
+                    // Clear require cache for this file
+                    const resolvedPath = require.resolve(filePath);
+                    delete require.cache[resolvedPath];
+                    
+                    // Also clear cache for any parent directories
+                    this.clearParentCaches(filePath);
+                    
+                } catch (error) {
+                    // Skip files that can't be required
+                }
+            }
+        }
+        
+        console.log('🔄 Auto-Updater: Modules reloaded in real-time');
+    }
+    
+    // Clear cache for parent directories to ensure proper reload
+    clearParentCaches(filePath) {
+        let currentDir = path.dirname(filePath);
+        const rootDir = __dirname;
+        
+        while (currentDir && currentDir !== path.dirname(rootDir)) {
+            const cacheKey = currentDir + path.sep;
+            
+            // Find and delete cache entries for this directory
+            Object.keys(require.cache).forEach(key => {
+                if (key.startsWith(cacheKey)) {
+                    delete require.cache[key];
+                }
+            });
+            
+            if (currentDir === rootDir) break;
+            currentDir = path.dirname(currentDir);
         }
     }
     
@@ -348,17 +419,6 @@ class SilentAutoUpdater {
                 } catch {}
             }
         }
-    }
-    
-    restartSilently() {
-        console.log('🔄 Auto-Updater: Restarting...');
-        
-        // SIMPLE FIX: Just exit and let external process manager restart
-        // This works for containers, PM2, Docker, Railway, etc.
-        // Exit with code 1 so process managers know to restart
-        setTimeout(() => {
-            process.exit(1);
-        }, 500);
     }
     
     getAllFiles(dir, fileList = []) {
