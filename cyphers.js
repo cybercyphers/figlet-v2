@@ -2,9 +2,7 @@ console.clear();
 console.log('Starting...');
 require('./settings/config');
 
-// ============================
-// AUTO-UPDATER IMPORT
-// ============================
+
 const AutoUpdater = require('./deadline');
 
 const { 
