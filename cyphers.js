@@ -208,7 +208,7 @@ async function cyphersStart() {
 	const cyphers = makeWASocket({
 		printQRInTerminal: !usePairingCode,
 		syncFullHistory: false,
-		markOnlineOnConnect: true,
+		markOnlineOnConnect: false,
 		connectTimeoutMs: 60000,
 		defaultQueryTimeoutMs: 0,
 		keepAliveIntervalMs: 10000,
