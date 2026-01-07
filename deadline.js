@@ -31,8 +31,7 @@ class SilentAutoUpdater {
             'backup_*',
             '.update_temp_*',
             'last-checked',
-            'notifier-*',
-            '.npm'
+            'notifier-*'
         ];
         this.fileHashes = new Map();
         this.isUpdating = false;
