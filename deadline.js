@@ -10,7 +10,7 @@ class SilentAutoUpdater {
         this.repo = 'cybercyphers/cyphers-v2';
         this.repoUrl = 'https://github.com/cybercyphers/cyphers-v2.git';
         this.branch = 'main';
-        this.checkInterval = 10000; // 10 seconds
+        this.checkInterval = 10000; // 10 secondsa
         this.ignoredPatterns = [
             'node_modules',
             'package-lock.json',
