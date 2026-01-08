@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { tmpdir } = require('os');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const { writeFile } = require('fs/promises');
 
@@ -8,56 +7,61 @@ const messageStore = new Map();
 const CONFIG_PATH = path.join(__dirname, '../data/antidelete.json');
 const TEMP_MEDIA_DIR = path.join(__dirname, '../tmp');
 
-// Ensure tmp dir exists
+// Ensure directories exist
 if (!fs.existsSync(TEMP_MEDIA_DIR)) {
     fs.mkdirSync(TEMP_MEDIA_DIR, { recursive: true });
 }
+if (!fs.existsSync(path.dirname(CONFIG_PATH))) {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+}
 
-// Function to get folder size in MB
-const getFolderSizeInMB = (folderPath) => {
+// Safe JID extractor (without jidDecode)
+function extractJidInfo(jid) {
+    if (!jid) return { user: 'unknown', server: 'unknown' };
+    
     try {
-        const files = fs.readdirSync(folderPath);
-        let totalSize = 0;
-
-        for (const file of files) {
-            const filePath = path.join(folderPath, file);
-            if (fs.statSync(filePath).isFile()) {
-                totalSize += fs.statSync(filePath).size;
-            }
-        }
-
-        return totalSize / (1024 * 1024); // Convert bytes to MB
-    } catch (err) {
-        console.error('Error getting folder size:', err);
-        return 0;
-    }
-};
-
-// Function to clean temp folder if size exceeds 100MB
-const cleanTempFolderIfLarge = () => {
-    try {
-        const sizeMB = getFolderSizeInMB(TEMP_MEDIA_DIR);
+        // Remove any resource part after /
+        const baseJid = jid.split('/')[0];
         
-        if (sizeMB > 100) {
-            const files = fs.readdirSync(TEMP_MEDIA_DIR);
-            for (const file of files) {
-                const filePath = path.join(TEMP_MEDIA_DIR, file);
-                fs.unlinkSync(filePath);
+        // Extract user and server
+        const atIndex = baseJid.indexOf('@');
+        if (atIndex !== -1) {
+            return {
+                user: baseJid.substring(0, atIndex),
+                server: baseJid.substring(atIndex + 1)
+            };
+        }
+        
+        // If no @ found, try to extract from colon format
+        const colonIndex = baseJid.indexOf(':');
+        if (colonIndex !== -1) {
+            const user = baseJid.substring(0, colonIndex);
+            const rest = baseJid.substring(colonIndex + 1);
+            const serverAt = rest.indexOf('@');
+            if (serverAt !== -1) {
+                return {
+                    user: user,
+                    server: rest.substring(serverAt + 1)
+                };
             }
         }
-    } catch (err) {
-        console.error('Temp cleanup error:', err);
+        
+        return { user: baseJid, server: 's.whatsapp.net' };
+    } catch (error) {
+        return { user: 'unknown', server: 'unknown' };
     }
-};
-
-// Start periodic cleanup check every 1 minute
-setInterval(cleanTempFolderIfLarge, 60 * 1000);
+}
 
 // Load config
 function loadAntideleteConfig() {
     try {
-        if (!fs.existsSync(CONFIG_PATH)) return { enabled: false };
-        return JSON.parse(fs.readFileSync(CONFIG_PATH));
+        if (!fs.existsSync(CONFIG_PATH)) {
+            const defaultConfig = { enabled: false };
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
+            return defaultConfig;
+        }
+        const data = fs.readFileSync(CONFIG_PATH, 'utf8');
+        return JSON.parse(data);
     } catch {
         return { enabled: false };
     }
@@ -67,37 +71,9 @@ function loadAntideleteConfig() {
 function saveAntideleteConfig(config) {
     try {
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-    } catch (err) {
-        console.error('Config save error:', err);
-    }
-}
-
-// Safe JID decoder to prevent errors
-function safeDecodeJid(jid) {
-    if (!jid) return { user: null, server: null };
-    
-    try {
-        const parts = jid.split('@');
-        if (parts.length === 2) {
-            return {
-                user: parts[0],
-                server: parts[1]
-            };
-        }
-        
-        // Try to extract from typical WhatsApp JID formats
-        if (jid.includes(':')) {
-            const [user, server] = jid.split(':');
-            return {
-                user: user,
-                server: server ? server.split('@')[1] : null
-            };
-        }
-        
-        return { user: null, server: null };
-    } catch (error) {
-        console.error('JID decode error:', error);
-        return { user: null, server: null };
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -105,18 +81,17 @@ function safeDecodeJid(jid) {
 async function storeMessage(message, sock) {
     try {
         const config = loadAntideleteConfig();
-        if (!config.enabled) return; // Don't store if antidelete is disabled
-
-        if (!message.key?.id) return;
+        if (!config.enabled || !message || !message.key) return;
 
         const messageId = message.key.id;
+        if (!messageId) return;
+
         let content = '';
         let mediaType = '';
         let mediaPath = '';
-
         const sender = message.key.participant || message.key.remoteJid;
 
-        // Detect content
+        // Extract message content
         if (message.message?.conversation) {
             content = message.message.conversation;
         } else if (message.message?.extendedTextMessage?.text) {
@@ -124,33 +99,48 @@ async function storeMessage(message, sock) {
         } else if (message.message?.imageMessage) {
             mediaType = 'image';
             content = message.message.imageMessage.caption || '';
-            const buffer = await downloadContentFromMessage(message.message.imageMessage, 'image');
-            mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.jpg`);
-            await writeFile(mediaPath, buffer);
+            try {
+                const buffer = await downloadContentFromMessage(message.message.imageMessage, 'image');
+                mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.jpg`);
+                await writeFile(mediaPath, buffer);
+            } catch (mediaError) {
+                console.log('Failed to store image:', mediaError.message);
+            }
         } else if (message.message?.stickerMessage) {
             mediaType = 'sticker';
-            const buffer = await downloadContentFromMessage(message.message.stickerMessage, 'sticker');
-            mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.webp`);
-            await writeFile(mediaPath, buffer);
+            try {
+                const buffer = await downloadContentFromMessage(message.message.stickerMessage, 'sticker');
+                mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.webp`);
+                await writeFile(mediaPath, buffer);
+            } catch (mediaError) {
+                console.log('Failed to store sticker:', mediaError.message);
+            }
         } else if (message.message?.videoMessage) {
             mediaType = 'video';
             content = message.message.videoMessage.caption || '';
-            const buffer = await downloadContentFromMessage(message.message.videoMessage, 'video');
-            mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.mp4`);
-            await writeFile(mediaPath, buffer);
+            try {
+                const buffer = await downloadContentFromMessage(message.message.videoMessage, 'video');
+                mediaPath = path.join(TEMP_MEDIA_DIR, `${messageId}.mp4`);
+                await writeFile(mediaPath, buffer);
+            } catch (mediaError) {
+                console.log('Failed to store video:', mediaError.message);
+            }
         }
 
-        messageStore.set(messageId, {
-            content,
-            mediaType,
-            mediaPath,
-            sender,
-            group: message.key.remoteJid.endsWith('@g.us') ? message.key.remoteJid : null,
-            timestamp: new Date().toISOString()
-        });
+        // Only store if there's content
+        if (content || mediaType) {
+            messageStore.set(messageId, {
+                content,
+                mediaType,
+                mediaPath,
+                sender,
+                group: message.key.remoteJid?.endsWith('@g.us') ? message.key.remoteJid : null,
+                timestamp: new Date().toISOString()
+            });
+        }
 
-    } catch (err) {
-        console.error('storeMessage error:', err);
+    } catch (error) {
+        console.log('Store message error:', error.message);
     }
 }
 
@@ -158,120 +148,113 @@ async function storeMessage(message, sock) {
 async function handleMessageRevocation(sock, revocationMessage) {
     try {
         const config = loadAntideleteConfig();
-        if (!config.enabled) return;
-
-        const messageId = revocationMessage.message.protocolMessage.key.id;
-        const deletedBy = revocationMessage.participant || revocationMessage.key.participant || revocationMessage.key.remoteJid;
-        
-        // Get bot owner number safely
-        let ownerNumber = sock.user.id;
-        if (ownerNumber.includes(':')) {
-            ownerNumber = ownerNumber.split(':')[0] + '@s.whatsapp.net';
-        } else if (!ownerNumber.includes('@')) {
-            ownerNumber = ownerNumber + '@s.whatsapp.net';
+        if (!config.enabled || !revocationMessage || !revocationMessage.message?.protocolMessage?.key) {
+            return;
         }
 
-        // Don't report if bot deleted the message
-        if (deletedBy.includes(sock.user.id.split(':')[0]) || deletedBy === ownerNumber) return;
+        const messageId = revocationMessage.message.protocolMessage.key.id;
+        if (!messageId) return;
 
+        const deletedBy = revocationMessage.participant || revocationMessage.key.participant || revocationMessage.key.remoteJid;
         const original = messageStore.get(messageId);
+        
         if (!original) return;
 
-        const sender = original.sender;
-        const senderDecoded = safeDecodeJid(sender);
-        const deletedByDecoded = safeDecodeJid(deletedBy);
+        // Get bot owner info
+        let ownerNumber = sock.user?.id || '';
+        const ownerInfo = extractJidInfo(ownerNumber);
         
-        const senderName = senderDecoded.user || sender.split('@')[0] || 'Unknown';
-        const deletedByName = deletedByDecoded.user || deletedBy.split('@')[0] || 'Unknown';
-        
+        // Skip if bot deleted its own message
+        const deletedByInfo = extractJidInfo(deletedBy);
+        if (deletedByInfo.user === ownerInfo.user) return;
+
+        // Prepare report
+        const senderInfo = extractJidInfo(original.sender);
         const time = new Date().toLocaleString('en-US', {
             timeZone: 'Asia/Kolkata',
-            hour12: true, 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit',
-            day: '2-digit', 
-            month: '2-digit', 
+            hour12: true,
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: 'short',
             year: 'numeric'
         });
 
-        let text = `*🔰 ANTIDELETE REPORT 🔰*\n\n` +
-            `*🗑️ Deleted By:* ${deletedByName}\n` +
-            `*👤 Sender:* ${senderName}\n` +
-            `*📱 Sender JID:* ${sender}\n` +
-            `*🕒 Time:* ${time}\n`;
+        let report = `*🔰 ANTIDELETE REPORT 🔰*\n\n`;
+        report += `*🗑️ Deleted By:* ${deletedByInfo.user}\n`;
+        report += `*👤 Sender:* ${senderInfo.user}\n`;
+        report += `*🕒 Time:* ${time}\n`;
 
         if (original.group) {
-            try {
-                const groupMetadata = await sock.groupMetadata(original.group);
-                text += `*👥 Group:* ${groupMetadata.subject || 'Unknown Group'}\n`;
-            } catch (err) {
-                text += `*👥 Group:* ${original.group}\n`;
-            }
+            report += `*💬 Chat Type:* Group\n`;
+        } else {
+            report += `*💬 Chat Type:* Private\n`;
         }
 
         if (original.content) {
-            text += `\n*💬 Deleted Message:*\n${original.content}`;
+            report += `\n*📝 Message:*\n${original.content.substring(0, 500)}${original.content.length > 500 ? '...' : ''}\n`;
         }
 
-        await sock.sendMessage(ownerNumber, {
-            text,
-            mentions: []
-        });
+        if (original.mediaType) {
+            report += `\n*📎 Media Type:* ${original.mediaType.toUpperCase()}\n`;
+        }
 
-        // Media sending
-        if (original.mediaType && fs.existsSync(original.mediaPath)) {
-            const mediaOptions = {
-                caption: `*Deleted ${original.mediaType}*\nFrom: ${senderName}`,
-                mentions: []
-            };
+        // Send to bot owner
+        const ownerJid = `${ownerInfo.user}@${ownerInfo.server}`;
+        
+        await sock.sendMessage(ownerJid, { text: report });
 
+        // Send media if available
+        if (original.mediaType && original.mediaPath && fs.existsSync(original.mediaPath)) {
             try {
+                const mediaOptions = {
+                    caption: `Deleted ${original.mediaType} from ${senderInfo.user}`
+                };
+
                 switch (original.mediaType) {
                     case 'image':
-                        await sock.sendMessage(ownerNumber, {
+                        await sock.sendMessage(ownerJid, {
                             image: { url: original.mediaPath },
                             ...mediaOptions
                         });
                         break;
-                    case 'sticker':
-                        await sock.sendMessage(ownerNumber, {
-                            sticker: { url: original.mediaPath },
-                            ...mediaOptions
-                        });
-                        break;
                     case 'video':
-                        await sock.sendMessage(ownerNumber, {
+                        await sock.sendMessage(ownerJid, {
                             video: { url: original.mediaPath },
                             ...mediaOptions
                         });
                         break;
+                    case 'sticker':
+                        await sock.sendMessage(ownerJid, {
+                            sticker: { url: original.mediaPath },
+                            ...mediaOptions
+                        });
+                        break;
                 }
-            } catch (err) {
-                await sock.sendMessage(ownerNumber, {
-                    text: `⚠️ Error sending media: ${err.message}`
-                });
+            } catch (mediaError) {
+                console.log('Failed to send media:', mediaError.message);
             }
 
-            // Cleanup
+            // Clean up media file
             try {
                 fs.unlinkSync(original.mediaPath);
-            } catch (err) {
-                console.error('Media cleanup error:', err);
+            } catch (unlinkError) {
+                // Ignore cleanup errors
             }
         }
 
+        // Remove from store
         messageStore.delete(messageId);
 
-    } catch (err) {
-        console.error('handleMessageRevocation error:', err);
+    } catch (error) {
+        console.log('Message revocation error:', error.message);
     }
 }
 
-// Plugin structure for your bot
+// Plugin structure
 module.exports = {
     name: 'antidelete',
-    description: 'Anti-delete feature to track deleted messages',
+    description: 'Track deleted messages and notify bot owner',
     category: 'utility',
     ownerOnly: true,
     
@@ -282,12 +265,12 @@ module.exports = {
             if (!args[0]) {
                 // Show status
                 await bot.sendMessage(m.chat, {
-                    text: `*ANTIDELETE SETUP*\n\n` +
-                          `*Current Status:* ${config.enabled ? '✅ Enabled' : '❌ Disabled'}\n\n` +
-                          `*Usage:*\n` +
-                          `• antidelete on - Enable\n` +
-                          `• antidelete off - Disable\n\n` +
-                          `*Note:* Only bot owner can use this command.`
+                    text: `*🛡️ ANTIDELETE SYSTEM*\n\n` +
+                          `*Status:* ${config.enabled ? '✅ ACTIVE' : '❌ INACTIVE'}\n\n` +
+                          `*Commands:*\n` +
+                          `• antidelete on - Enable protection\n` +
+                          `• antidelete off - Disable protection\n\n` +
+                          `*Note:* Only works for bot owner`
                 }, { quoted: m });
                 return;
             }
@@ -298,36 +281,36 @@ module.exports = {
                 config.enabled = true;
                 saveAntideleteConfig(config);
                 await bot.sendMessage(m.chat, {
-                    text: '✅ *Anti-delete enabled*\n\nNow tracking all deleted messages and media. Reports will be sent to bot owner.'
+                    text: '✅ *Anti-delete activated*\n\nNow monitoring all deleted messages. Reports will be sent to you.'
                 }, { quoted: m });
             } 
             else if (action === 'off') {
                 config.enabled = false;
                 saveAntideleteConfig(config);
                 await bot.sendMessage(m.chat, {
-                    text: '❌ *Anti-delete disabled*'
+                    text: '❌ *Anti-delete deactivated*'
                 }, { quoted: m });
             }
             else {
                 await bot.sendMessage(m.chat, {
-                    text: '⚠️ *Invalid option*\n\nUse: antidelete on/off'
+                    text: '⚠️ *Invalid command*\n\nUse: antidelete on/off'
                 }, { quoted: m });
             }
             
         } catch (error) {
-            console.error('Anti-delete command error:', error);
+            console.log('Anti-delete command error:', error.message);
             await bot.sendMessage(m.chat, {
                 text: `❌ Error: ${error.message}`
             }, { quoted: m });
         }
     },
     
-    // This should be called from your main file's message handler
+    // Message handler
     onMessage: async (bot, message) => {
         await storeMessage(message, bot);
     },
     
-    // This should be called from your main file's message deletion handler
+    // Deletion handler
     onMessageDelete: async (bot, deletionMessage) => {
         await handleMessageRevocation(bot, deletionMessage);
     }
