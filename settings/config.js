@@ -1,4 +1,4 @@
-global.allowUpdates =; //u can edit this place if u want to allow automatic updates
+global.allowUpdates ="_"; //u can edit this place if u want to allow automatic updates
 global.owner = "233539738956" //owner number
 global.footer = "cypher" //footer section
 global.namabot = "cyphers.js" //nama bot
