@@ -16,32 +16,30 @@ function checkConfigForAllowUpdates() {
         const configContent = fs.readFileSync(configPath, 'utf8');
         
         // Parse the config file safely (NO eval!)
-        // Look for global.allowUpdates = true/false
         const lines = configContent.split('\n');
         
         for (const line of lines) {
             const trimmed = line.trim();
             
-            // Check for global.allowUpdates = true
+            // Check for global.allowUpdates = value
             if (trimmed.includes('global.allowUpdates')) {
-                if (trimmed.includes('= true')) {
-                    return true;
-                }
-                if (trimmed.includes('= false')) {
-                    return false;
-                }
-                // Check for specific values
-                const match = trimmed.match(/global\.allowUpdates\s*=\s*(true|false)/i);
+                const match = trimmed.match(/global\.allowUpdates\s*=\s*(.*?);/);
                 if (match) {
-                    return match[1].toLowerCase() === 'true';
-                }
-            }
-            
-            // Also check for module.exports pattern
-            if (trimmed.includes('allowUpdates:')) {
-                const match = trimmed.match(/allowUpdates\s*:\s*(true|false)/i);
-                if (match) {
-                    return match[1].toLowerCase() === 'true';
+                    const value = match[1].trim();
+                    
+                    if (value === 'true') return true;
+                    if (value === 'false') return false;
+                    if (value === '_' || value === "''" || value === '""') return '_';
+                    
+                    // Try to parse other values
+                    try {
+                        const parsed = JSON.parse(value);
+                        if (typeof parsed === 'boolean') return parsed;
+                    } catch {
+                        // If not parseable as JSON, check string
+                        if (value.toLowerCase() === 'true') return true;
+                        if (value.toLowerCase() === 'false') return false;
+                    }
                 }
             }
         }
@@ -66,7 +64,7 @@ async function checkAndSetup() {
         // Check config first
         const configStatus = checkConfigForAllowUpdates();
         
-        // If config has a boolean value (true/false), return it
+        // If config has a boolean value (true/false), return it without asking
         if (configStatus === true || configStatus === false) {
             console.log('\x1b[36m✅ Using saved auto-update setting\x1b[0m');
             console.log(`\x1b[36mAuto-updates: ${configStatus ? 'ENABLED' : 'DISABLED'}\x1b[0m`);
@@ -124,8 +122,8 @@ async function saveAllowUpdatesToConfig(allowUpdates) {
         if (configContent.includes('global.allowUpdates')) {
             // Replace existing value
             configContent = configContent.replace(
-                /global\.allowUpdates\s*=\s*(true|false)/g,
-                `global.allowUpdates = ${allowUpdates}`
+                /global\.allowUpdates\s*=\s*.*?;/,
+                `global.allowUpdates = ${allowUpdates};`
             );
         } else {
             // Add at the beginning of the file
@@ -640,7 +638,7 @@ async function startBot() {
                 
                 // Start the auto-updater
                 if (typeof autoUpdaterInstance.start === 'function') {
-                    autoUpdaterInstance.start();
+                    await autoUpdaterInstance.start();
                     console.log('\x1b[32m✅ Auto-updates initialized\x1b[0m');
                     
                     // Start continuous update checking
@@ -764,6 +762,11 @@ async function startBot() {
                     updateCheckInterval = null;
                 }
                 
+                // Stop auto-updater instance if it exists
+                if (autoUpdaterInstance && typeof autoUpdaterInstance.stop === 'function') {
+                    autoUpdaterInstance.stop();
+                }
+                
                 // Apply config settings before handling disconnect
                 applyConfigSettings();
                 
@@ -842,7 +845,7 @@ async function startBot() {
                 console.log('\x1b[32m└──────────────────────────────────────────────────────────┘\x1b[0m');
                 
                 // Start continuous update checking if enabled
-                if (global.allowUpdates) {
+                if (global.allowUpdates && autoUpdaterInstance) {
                     startContinuousUpdateChecking();
                 }
                 
