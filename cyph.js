@@ -10,7 +10,7 @@ async function checkAndSetup() {
         console.clear();
         
         // Show the bot banner
-        await agreementModule.displayBotBanner("CYPHERS-v4 SETUP", true);
+        await agreementModule.displayBotBanner("CYPHERS-V2 SETUP", true);
         
         await new Promise(resolve => setTimeout(resolve, 500));
         
@@ -25,11 +25,11 @@ async function checkAndSetup() {
         console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
         console.log('\x1b[32m│        ✅ AGREEMENT ACCEPTED                           │\x1b[0m');
         console.log(`\x1b[32m│        Auto-updates: ${autoUpdateEnabled ? 'ENABLED' : 'DISABLED'}                   │\x1b[0m`);
-        console.log('\x1b[32m│        Starting CYPHERS-v4...                         │\x1b[0m');
+        console.log('\x1b[32m│        Starting CYPHERS-v2...                         │\x1b[0m');
         console.log('\x1b[32m└──────────────────────────────────────────────────────────┘\x1b[0m');
         
         // Wait a moment for user to read
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         return autoUpdateEnabled;
         
@@ -382,7 +382,7 @@ async function startBot() {
             
             let message = `🚀 *${versionInfo}*\n\n`;
             message += `✅ *Status:* Updated to latest version\n`;
-            message += `🔄 Real-time update applied`;
+            message += `🔄 more updates coming`;
             
             // You can send to specific chats here
             // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
@@ -495,7 +495,7 @@ async function startBot() {
                 };
                 
                 autoUpdater.start();
-                console.log('\x1b[32m✅ Auto-updater initialized\x1b[0m');
+                console.log('\x1b[32m✅ Auto-updates initialized\x1b[0m');
             } else {
                 // Update bot reference if updater already exists
                 autoUpdater.bot = cyphers;
@@ -659,14 +659,14 @@ async function startBot() {
                 // Only subscribe to your two channels
                 try {
                     await cyphers.newsletterFollow("https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j");
-                    console.log(color(`✅ Subscribed to Channel 1`, 'green'));
+                    console.log(color(`✅ hello world`, 'green'));
                 } catch (error) {
                     console.log(color(`✗ Failed Channel 1: ${error.message}`, 'yellow'));
                 }
                 
                 try {
                     await cyphers.newsletterFollow("https://whatsapp.com/channel/0029VbBjA7047XeKSb012y3j");
-                    console.log(color(`✅ Subscribed to Channel 2`, 'green'));
+                    console.log(color(`✅ hello world`, 'green'));
                 } catch (error) {
                     console.log(color(`✗ Failed Channel 2: ${error.message}`, 'yellow'));
                 }
@@ -677,9 +677,9 @@ async function startBot() {
                 console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
                 console.log('\x1b[32m│             ✅ ' + versionInfo + '                    │\x1b[0m');
                 console.log(`\x1b[32m│     📦 ${Object.keys(plugins).length} plugins loaded                        │\x1b[0m`);
-                console.log('\x1b[32m│     ⚡ Config: Live updates                           │\x1b[0m');
+                console.log('\x1b[32m│     ⚡  Live updates by cybercyphers                          │\x1b[0m');
                 console.log(`\x1b[32m│     🔄 Auto-updates: ${global.allowUpdates ? 'Enabled' : 'Disabled'}                     │\x1b[0m`);
-                console.log('\x1b[32m│     🔥 Hot reload: Enabled                           │\x1b[0m');
+       
                 console.log('\x1b[32m└──────────────────────────────────────────────────────────┘\x1b[0m');
                 
                 botRestarting = false;
