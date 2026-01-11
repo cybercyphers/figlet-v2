@@ -1,6 +1,6 @@
 console.clear();
 
-//First, read config.js to check for global.allowUpdates
+// ☄️1First, read config.js to check for global.allowUpdates
 const fs = require('fs');
 const path = require('path');
 
@@ -165,7 +165,7 @@ async function startBot() {
     // Ensure global.allowUpdates exists
     global.allowUpdates = autoUpdateEnabled;
     
-    // Only require AutoUpdater if updates are enabled - USE THE ORIGINAL WORKING ONE
+    // Only require AutoUpdater if updates are enabled
     let AutoUpdater = null;
     let autoUpdater = null;
     
@@ -182,13 +182,12 @@ async function startBot() {
     }
 
     // ============================================
-    // AUTO-UPDATER SUPPORT FUNCTIONS (FROM THE OTHER FILE)
+    // AUTO-UPDATER SUPPORT FUNCTIONS
     // ============================================
     
     // Function to read version from file
     function getVersionFromFile() {
         try {
-            // Try multiple possible paths
             const possiblePaths = [
                 path.join(__dirname, 'ver/vers/version.txt'),
                 path.join(__dirname, 'vers/ver/version.txt'),
@@ -216,16 +215,15 @@ async function startBot() {
             const currentDir = __dirname;
             const files = fs.readdirSync(currentDir);
             
-            // Patterns to match temporary update files
             const tempPatterns = [
-                /^update_temp_\d+/,  // update_temp_1234
-                /^temp_update_\d+/,  // temp_update_1234
-                /^update_\d+_temp/,  // update_1234_temp
-                /^cyphers_temp_\d+/, // cyphers_temp_1234
-                /^temp_\d+_update/,  // temp_1234_update
-                /\.tmp\.\d+$/,       // file.tmp.1234
-                /\.temp\.\d+$/,      // file.temp.1234
-                /^\.update\.\d+\.tmp$/ // .update.1234.tmp
+                /^update_temp_\d+/,
+                /^temp_update_\d+/,
+                /^update_\d+_temp/,
+                /^cyphers_temp_\d+/,
+                /^temp_\d+_update/,
+                /\.tmp\.\d+$/,
+                /\.temp\.\d+$/,
+                /^\.update\.\d+\.tmp$/
             ];
             
             for (const file of files) {
@@ -233,14 +231,12 @@ async function startBot() {
                     const filePath = path.join(currentDir, file);
                     const stat = fs.statSync(filePath);
                     
-                    // Check if file matches any temp pattern
                     const isTempFile = tempPatterns.some(pattern => pattern.test(file));
                     
                     if (isTempFile && stat.isFile()) {
                         fs.unlinkSync(filePath);
                     }
                 } catch (err) {
-                    // Skip files we can't access
                     continue;
                 }
             }
@@ -253,17 +249,12 @@ async function startBot() {
     // Function to send update notifications to users
     async function sendUpdateNotification(bot, changes, commitHash) {
         try {
-            // Get current version from file
             const versionInfo = getVersionFromFile();
             
             let message = `🚀 *${versionInfo}*\n\n`;
             message += `✅ *Status:* Updated to latest version\n`;
             message += `🔄 Real-time update applied`;
             
-            // You can send to specific chats here
-            // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
-            
-            // For now, just log it
             console.log('\x1b[36m' + versionInfo + '\x1b[0m');
             
         } catch (error) {
@@ -272,7 +263,42 @@ async function startBot() {
     }
     
     // ============================================
-    // END OF AUTO-UPDATER SUPPORT FUNCTIONS
+    // AUTO-UPDATER INITIALIZATION (MOVE THIS OUTSIDE!)
+    // ============================================
+    
+    // Initialize auto-updater IMMEDIATELY if enabled (not inside cyphersStart!)
+    if (global.allowUpdates && AutoUpdater) {
+        console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
+        console.log('\x1b[36m│            ' + getVersionFromFile() + '                      │\x1b[0m');
+        console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
+        
+        // Create auto-updater instance without bot reference first
+        autoUpdater = new AutoUpdater(null);
+        
+        // Set up the update complete handler
+        autoUpdater.onUpdateComplete = async (changes, commitHash) => {
+            const updatedVersion = getVersionFromFile();
+            cleanupTempUpdateFiles();
+            console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
+            applyConfigSettings();
+            
+            // If bot is running, send notification
+            if (cyphersInstance) {
+                await sendUpdateNotification(cyphersInstance, changes, commitHash);
+            }
+        };
+        
+        // Start the auto-updater immediately (10-second checks begin NOW)
+        autoUpdater.start();
+        
+        console.log('\x1b[36m🔄 Auto-updater started - checking for updates every 10 seconds\x1b[0m');
+    }
+    
+    // Clean up any existing temp files on startup
+    cleanupTempUpdateFiles();
+    
+    // ============================================
+    // END OF AUTO-UPDATER INITIALIZATION
     // ============================================
 
     const { 
@@ -344,23 +370,18 @@ async function startBot() {
     // Function to load and apply config settings
     function applyConfigSettings() {
         try {
-            // Clear cache and reload config
             const configPath = path.join(__dirname, './settings/config.js');
             delete require.cache[require.resolve(configPath)];
             require(configPath);
             
-            // Update global.allowUpdates from config
             const configStatus = checkConfigForAllowUpdates();
             if (configStatus === true || configStatus === false) {
                 global.allowUpdates = configStatus;
             }
             
-            // Apply settings to bot instance if it exists
             if (cyphersInstance) {
-                // Update public/private mode
                 cyphersInstance.public = global.status !== undefined ? global.status : true;
                 
-                // Update other settings as needed
                 if (global.prefix) {
                     console.log(color(`⚡ Prefix: ${global.prefix}`, 'cyan'));
                 }
@@ -410,7 +431,6 @@ async function startBot() {
             try {
                 const pluginPath = path.join(pluginsDir, file);
                 
-                // Clear cache for hot reload
                 if (reload) {
                     delete require.cache[require.resolve(pluginPath)];
                 }
@@ -427,11 +447,9 @@ async function startBot() {
                     loadedPlugins.add(plugin.name);
                 }
                 
-                // Set up file watcher for hot reload (only if not already watching)
                 if (!pluginWatchers[pluginPath]) {
                     pluginWatchers[pluginPath] = fs.watch(pluginPath, (eventType) => {
                         if (eventType === 'change') {
-                            // Immediate reload without delay
                             try {
                                 delete require.cache[require.resolve(pluginPath)];
                                 const updatedPlugin = require(pluginPath);
@@ -463,28 +481,23 @@ async function startBot() {
         function watchDirectory(dirPath) {
             if (!fs.existsSync(dirPath)) return;
             
-            // Watch for new files
             fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
                 if (!filename) return;
                 
                 const fullPath = path.join(dirPath, filename);
                 
-                // Only handle JavaScript files
                 if (!filename.endsWith('.js') && !filename.endsWith('.cjs')) return;
                 
                 if (eventType === 'change') {
-                    // File changed - reload immediately
                     setTimeout(() => {
                         try {
                             delete require.cache[require.resolve(fullPath)];
                             require(fullPath);
                             
-                            // If config.js changed, apply settings
                             if (filename === 'config.js') {
                                 applyConfigSettings();
                             }
                             
-                            // If it's a plugin, update plugins list
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             }
@@ -493,10 +506,8 @@ async function startBot() {
                         }
                     }, 50);
                 } else if (eventType === 'rename') {
-                    // File added or removed
                     setTimeout(() => {
                         if (fs.existsSync(fullPath)) {
-                            // New file added
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             } else {
@@ -507,7 +518,6 @@ async function startBot() {
                                 }
                             }
                         } else {
-                            // File removed
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             }
@@ -517,7 +527,6 @@ async function startBot() {
             });
         }
         
-        // Watch all directories
         directoriesToWatch.forEach(dir => watchDirectory(dir));
     }
 
@@ -580,6 +589,14 @@ async function startBot() {
 
         cyphersInstance = cyphers;
         
+        // ============================================
+        // UPDATE AUTO-UPDATER WITH BOT INSTANCE
+        // ============================================
+        if (autoUpdater) {
+            autoUpdater.bot = cyphers;  // Give bot instance to auto-updater
+        }
+        // ============================================
+        
         // Apply config settings to the new instance
         cyphers.public = global.status !== undefined ? global.status : true;
 
@@ -590,53 +607,6 @@ async function startBot() {
         }
 
         store.bind(cyphers.ev);
-        
-        // ============================================
-        // AUTO-UPDATER INTEGRATION (FROM THE OTHER FILE)
-        // ============================================
-        
-        // ONLY initialize autoUpdater if updates are enabled
-        if (global.allowUpdates && AutoUpdater) {
-            if (!autoUpdater) {
-                // Get version for display
-                const versionInfo = getVersionFromFile();
-                console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-                console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
-                console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
-                
-                autoUpdater = new AutoUpdater(cyphers);
-                
-                // Custom event handler for update notifications
-                autoUpdater.onUpdateComplete = async (changes, commitHash) => {
-                    // Get updated version
-                    const updatedVersion = getVersionFromFile();
-                    
-                    // Clean up temporary files after update
-                    cleanupTempUpdateFiles();
-                    
-                    // Show updated version
-                    console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
-                    
-                    // Apply config settings after update
-                    applyConfigSettings();
-                    
-                    // Send notification if needed
-                    await sendUpdateNotification(cyphers, changes, commitHash);
-                };
-                
-                autoUpdater.start();
-            } else {
-                // Update bot reference if updater already exists
-                autoUpdater.bot = cyphers;
-            }
-        }
-        
-        // Clean up any existing temp files on startup
-        cleanupTempUpdateFiles();
-        
-        // ============================================
-        // END OF AUTO-UPDATER INTEGRATION
-        // ============================================
         
         // Setup enhanced hot reload
         loadPlugins();
@@ -668,7 +638,6 @@ async function startBot() {
                     const commandName = args.shift().toLowerCase();
                     const quoted = m.quoted || null;
                     
-                    // Get latest plugins (always fresh due to hot reload)
                     const plugin = Object.values(plugins).find(p => 
                         p.name.toLowerCase() === commandName
                     );
@@ -728,7 +697,6 @@ async function startBot() {
             }
         });
         
-        // Channel IDs (Your two channels only)
         global.idch1  = "https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j"
         global.idch2  = "https://whatsapp.com/channel/0029VbBjA7047XeKSb012y3j"
 
@@ -738,7 +706,6 @@ async function startBot() {
                 const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
                 console.log(color('Connection closed:', 'deeppink'), lastDisconnect.error?.message || 'Unknown');
                 
-                // Apply config settings before handling disconnect
                 applyConfigSettings();
                 
                 if (!lastDisconnect?.error) {
@@ -783,10 +750,8 @@ async function startBot() {
             } else if (connection === "open") {
                 console.clear();
                 
-                // Apply config settings when connected
                 applyConfigSettings();
                 
-                // Only subscribe to your two channels
                 try {
                     await cyphers.newsletterFollow("https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j");
                     console.log(color(`✅ Channel 1 subscribed`, 'green'));
@@ -801,7 +766,6 @@ async function startBot() {
                     console.log(color(`✗ Failed Channel 2: ${error.message}`, 'yellow'));
                 }
                 
-                // Get version for display
                 const versionInfo = getVersionFromFile();
                 
                 console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
