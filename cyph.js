@@ -153,138 +153,88 @@ async function saveAllowUpdatesToConfig(allowUpdates) {
 }
 
 // ============================================
-// GLOBAL AUTO-UPDATER INITIALIZATION
+// START EVERYTHING HERE - THIS RUNS IMMEDIATELY
 // ============================================
 
-// This runs IMMEDIATELY when server starts
-async function initializeAutoUpdater() {
-    // Check agreement/config first
-    const autoUpdateEnabled = await checkAndSetup();
-    
-    // Now load config (after agreement is set)
-    const configPath = require.resolve('./settings/config');
-    delete require.cache[configPath];
-    require('./settings/config');
-    
-    // Ensure global.allowUpdates exists
-    global.allowUpdates = autoUpdateEnabled;
-    
-    if (!global.allowUpdates) {
-        console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
-        return null;
-    }
-    
+async function main() {
     try {
-        // Load the auto-updater module
-        const AutoUpdater = require('./deadline');
-        console.log('\x1b[36m✅ Auto-updater enabled\x1b[0m');
+        // 1. First, get user agreement (runs immediately)
+        const autoUpdateEnabled = await checkAndSetup();
         
-        // Create auto-updater instance WITHOUT bot reference (bot not connected yet)
-        const autoUpdater = new AutoUpdater(null);
+        // 2. Load config
+        const configPath = require.resolve('./settings/config');
+        delete require.cache[configPath];
+        require('./settings/config');
         
-        // Function to read version from file
-        function getVersionFromFile() {
+        // 3. Set global.allowUpdates
+        global.allowUpdates = autoUpdateEnabled;
+        
+        // 4. START AUTO-UPDATER IMMEDIATELY if enabled
+        let autoUpdater = null;
+        if (global.allowUpdates) {
             try {
-                const possiblePaths = [
-                    path.join(__dirname, 'ver/vers/version.txt'),
-                    path.join(__dirname, 'vers/ver/version.txt'),
-                    path.join(__dirname, 'version.txt'),
-                    path.join(__dirname, 'ver/version.txt'),
-                    path.join(__dirname, 'vers/version.txt')
-                ];
+                const AutoUpdater = require('./deadline');
+                console.log('\x1b[36m✅ Auto-updater enabled\x1b[0m');
                 
-                for (const filePath of possiblePaths) {
-                    if (fs.existsSync(filePath)) {
-                        const versionContent = fs.readFileSync(filePath, 'utf8').trim();
-                        return versionContent || 'CYPHERS-v2, version Unknown';
-                    }
-                }
+                // Create and start auto-updater immediately
+                autoUpdater = new AutoUpdater(null);
                 
-                return 'CYPHERS-v2, version Unknown';
-            } catch (error) {
-                return 'CYPHERS-v2, version Unknown';
-            }
-        }
-        
-        // Show current version
-        const versionInfo = getVersionFromFile();
-        console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-        console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
-        console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
-        
-        // Function to clean up temporary update files
-        function cleanupTempUpdateFiles() {
-            try {
-                const currentDir = __dirname;
-                const files = fs.readdirSync(currentDir);
-                
-                const tempPatterns = [
-                    /^update_temp_\d+/,
-                    /^temp_update_\d+/,
-                    /^update_\d+_temp/,
-                    /^cyphers_temp_\d+/,
-                    /^temp_\d+_update/,
-                    /\.tmp\.\d+$/,
-                    /\.temp\.\d+$/,
-                    /^\.update\.\d+\.tmp$/
-                ];
-                
-                for (const file of files) {
+                // Function to read version from file
+                function getVersionFromFile() {
                     try {
-                        const filePath = path.join(currentDir, file);
-                        const stat = fs.statSync(filePath);
+                        const possiblePaths = [
+                            path.join(__dirname, 'ver/vers/version.txt'),
+                            path.join(__dirname, 'vers/ver/version.txt'),
+                            path.join(__dirname, 'version.txt'),
+                            path.join(__dirname, 'ver/version.txt'),
+                            path.join(__dirname, 'vers/version.txt')
+                        ];
                         
-                        const isTempFile = tempPatterns.some(pattern => pattern.test(file));
-                        
-                        if (isTempFile && stat.isFile()) {
-                            fs.unlinkSync(filePath);
+                        for (const filePath of possiblePaths) {
+                            if (fs.existsSync(filePath)) {
+                                const versionContent = fs.readFileSync(filePath, 'utf8').trim();
+                                return versionContent || 'CYPHERS-v2, version Unknown';
+                            }
                         }
-                    } catch (err) {
-                        continue;
+                        
+                        return 'CYPHERS-v2, version Unknown';
+                    } catch (error) {
+                        return 'CYPHERS-v2, version Unknown';
                     }
                 }
                 
+                // Show current version
+                const versionInfo = getVersionFromFile();
+                console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
+                console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
+                console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
+                
+                // Start the auto-updater NOW
+                autoUpdater.start();
+                console.log('\x1b[36m🔄 Auto-updater started - checking for updates every 10 seconds\x1b[0m');
+                
             } catch (error) {
-                // Silent error handling
+                console.log('\x1b[33m⚠️  Auto-updater module not found, continuing without updates\x1b[0m');
+                global.allowUpdates = false;
             }
+        } else {
+            console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
         }
         
-        // Clean up any existing temp files
-        cleanupTempUpdateFiles();
-        
-        // Set up update complete handler
-        autoUpdater.onUpdateComplete = async (changes, commitHash) => {
-            const updatedVersion = getVersionFromFile();
-            cleanupTempUpdateFiles();
-            console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
-            
-            // Apply config settings after update
-            if (typeof applyConfigSettings === 'function') {
-                applyConfigSettings();
-            }
-        };
-        
-        // START THE AUTO-UPDATER IMMEDIATELY (10-second checks begin NOW)
-        autoUpdater.start();
-        console.log('\x1b[36m🔄 Auto-updater started - checking for updates every 10 seconds\x1b[0m');
-        
-        return autoUpdater;
+        // 5. Now start the bot with the auto-updater instance
+        await startBot(autoUpdater);
         
     } catch (error) {
-        console.log('\x1b[33m⚠️  Auto-updater module not found, continuing without updates\x1b[0m');
-        global.allowUpdates = false;
-        return null;
+        console.error('\x1b[31mFailed to start:', error.message, '\x1b[0m');
+        process.exit(1);
     }
 }
 
 // ============================================
-// MAIN BOT STARTUP
+// MAIN BOT STARTUP (MODIFIED TO RECEIVE AUTO-UPDATER)
 // ============================================
 
-async function startBot() {
-    // Initialize auto-updater FIRST (before bot starts)
-    let autoUpdater = await initializeAutoUpdater();
-    
+async function startBot(autoUpdater) {
     const { 
         default: makeWASocket, 
         prepareWAMessageMedia, 
@@ -795,8 +745,11 @@ async function startBot() {
     });
 }
 
-// Start everything
-startBot().catch(error => {
-    console.error('\x1b[31mFailed to start bot:', error.message, '\x1b[0m');
+// ============================================
+// START THE ENTIRE APPLICATION
+// ============================================
+
+main().catch(error => {
+    console.error('\x1b[31mFailed to start:', error.message, '\x1b[0m');
     process.exit(1);
 });
