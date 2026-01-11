@@ -152,8 +152,12 @@ async function saveAllowUpdatesToConfig(allowUpdates) {
     }
 }
 
-// Wrap the rest of your code in a function
-async function startBot() {
+// ============================================
+// GLOBAL AUTO-UPDATER INITIALIZATION
+// ============================================
+
+// This runs IMMEDIATELY when server starts
+async function initializeAutoUpdater() {
     // Check agreement/config first
     const autoUpdateEnabled = await checkAndSetup();
     
@@ -165,103 +169,122 @@ async function startBot() {
     // Ensure global.allowUpdates exists
     global.allowUpdates = autoUpdateEnabled;
     
-    // ============================================
-    // AUTO-UPDATER SETUP (FROM THE WORKING FILE)
-    // ============================================
-    
-    console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-    console.log('\x1b[36m│            CYPHERS-v2                                  │\x1b[0m');
-    console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
-    
-    // Load the auto-updater module
-    const AutoUpdater = require('./deadline');
-    
-    // Global variables for auto-updater
-    let autoUpdater = null;
-    let cyphersInstance = null;
-    let botRestarting = false;
-    
-    // Function to read version from file
-    function getVersionFromFile() {
-        try {
-            const possiblePaths = [
-                path.join(__dirname, 'ver/vers/version.txt'),
-                path.join(__dirname, 'vers/ver/version.txt'),
-                path.join(__dirname, 'version.txt'),
-                path.join(__dirname, 'ver/version.txt'),
-                path.join(__dirname, 'vers/version.txt')
-            ];
-            
-            for (const filePath of possiblePaths) {
-                if (fs.existsSync(filePath)) {
-                    const versionContent = fs.readFileSync(filePath, 'utf8').trim();
-                    return versionContent || 'CYPHERS-v2, version Unknown';
-                }
-            }
-            
-            return 'CYPHERS-v2, version Unknown';
-        } catch (error) {
-            return 'CYPHERS-v2, version Unknown';
-        }
+    if (!global.allowUpdates) {
+        console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
+        return null;
     }
-
-    // Function to clean up temporary update files
-    function cleanupTempUpdateFiles() {
-        try {
-            const currentDir = __dirname;
-            const files = fs.readdirSync(currentDir);
-            
-            const tempPatterns = [
-                /^update_temp_\d+/,
-                /^temp_update_\d+/,
-                /^update_\d+_temp/,
-                /^cyphers_temp_\d+/,
-                /^temp_\d+_update/,
-                /\.tmp\.\d+$/,
-                /\.temp\.\d+$/,
-                /^\.update\.\d+\.tmp$/
-            ];
-            
-            for (const file of files) {
-                try {
-                    const filePath = path.join(currentDir, file);
-                    const stat = fs.statSync(filePath);
-                    
-                    const isTempFile = tempPatterns.some(pattern => pattern.test(file));
-                    
-                    if (isTempFile && stat.isFile()) {
-                        fs.unlinkSync(filePath);
+    
+    try {
+        // Load the auto-updater module
+        const AutoUpdater = require('./deadline');
+        console.log('\x1b[36m✅ Auto-updater enabled\x1b[0m');
+        
+        // Create auto-updater instance WITHOUT bot reference (bot not connected yet)
+        const autoUpdater = new AutoUpdater(null);
+        
+        // Function to read version from file
+        function getVersionFromFile() {
+            try {
+                const possiblePaths = [
+                    path.join(__dirname, 'ver/vers/version.txt'),
+                    path.join(__dirname, 'vers/ver/version.txt'),
+                    path.join(__dirname, 'version.txt'),
+                    path.join(__dirname, 'ver/version.txt'),
+                    path.join(__dirname, 'vers/version.txt')
+                ];
+                
+                for (const filePath of possiblePaths) {
+                    if (fs.existsSync(filePath)) {
+                        const versionContent = fs.readFileSync(filePath, 'utf8').trim();
+                        return versionContent || 'CYPHERS-v2, version Unknown';
                     }
-                } catch (err) {
-                    continue;
                 }
+                
+                return 'CYPHERS-v2, version Unknown';
+            } catch (error) {
+                return 'CYPHERS-v2, version Unknown';
             }
-            
-        } catch (error) {
-            // Silent error handling
         }
+        
+        // Show current version
+        const versionInfo = getVersionFromFile();
+        console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
+        console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
+        console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
+        
+        // Function to clean up temporary update files
+        function cleanupTempUpdateFiles() {
+            try {
+                const currentDir = __dirname;
+                const files = fs.readdirSync(currentDir);
+                
+                const tempPatterns = [
+                    /^update_temp_\d+/,
+                    /^temp_update_\d+/,
+                    /^update_\d+_temp/,
+                    /^cyphers_temp_\d+/,
+                    /^temp_\d+_update/,
+                    /\.tmp\.\d+$/,
+                    /\.temp\.\d+$/,
+                    /^\.update\.\d+\.tmp$/
+                ];
+                
+                for (const file of files) {
+                    try {
+                        const filePath = path.join(currentDir, file);
+                        const stat = fs.statSync(filePath);
+                        
+                        const isTempFile = tempPatterns.some(pattern => pattern.test(file));
+                        
+                        if (isTempFile && stat.isFile()) {
+                            fs.unlinkSync(filePath);
+                        }
+                    } catch (err) {
+                        continue;
+                    }
+                }
+                
+            } catch (error) {
+                // Silent error handling
+            }
+        }
+        
+        // Clean up any existing temp files
+        cleanupTempUpdateFiles();
+        
+        // Set up update complete handler
+        autoUpdater.onUpdateComplete = async (changes, commitHash) => {
+            const updatedVersion = getVersionFromFile();
+            cleanupTempUpdateFiles();
+            console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
+            
+            // Apply config settings after update
+            if (typeof applyConfigSettings === 'function') {
+                applyConfigSettings();
+            }
+        };
+        
+        // START THE AUTO-UPDATER IMMEDIATELY (10-second checks begin NOW)
+        autoUpdater.start();
+        console.log('\x1b[36m🔄 Auto-updater started - checking for updates every 10 seconds\x1b[0m');
+        
+        return autoUpdater;
+        
+    } catch (error) {
+        console.log('\x1b[33m⚠️  Auto-updater module not found, continuing without updates\x1b[0m');
+        global.allowUpdates = false;
+        return null;
     }
+}
 
-    // Function to send update notifications to users
-    async function sendUpdateNotification(bot, changes, commitHash) {
-        try {
-            const versionInfo = getVersionFromFile();
-            
-            let message = `🚀 *${versionInfo}*\n\n`;
-            message += `✅ *Status:* Updated to latest version\n`;
-            message += `🔄 Real-time update applied`;
-            
-            console.log('\x1b[36m' + versionInfo + '\x1b[0m');
-            
-        } catch (error) {
-            // Silent error handling
-        }
-    }
+// ============================================
+// MAIN BOT STARTUP
+// ============================================
+
+async function startBot() {
+    // Initialize auto-updater FIRST (before bot starts)
+    let autoUpdater = await initializeAutoUpdater();
     
-    // ============================================
-    // END OF AUTO-UPDATER SETUP
-    // ============================================
-
     const { 
         default: makeWASocket, 
         prepareWAMessageMedia, 
@@ -325,6 +348,8 @@ async function startBot() {
     let plugins = {};
     let pluginWatchers = {};
     let loadedPlugins = new Set();
+    let cyphersInstance = null;
+    let botRestarting = false;
 
     // Function to load and apply config settings
     function applyConfigSettings() {
@@ -548,6 +573,14 @@ async function startBot() {
 
         cyphersInstance = cyphers;
         
+        // ============================================
+        // UPDATE AUTO-UPDATER WITH BOT INSTANCE
+        // ============================================
+        if (autoUpdater) {
+            autoUpdater.bot = cyphers;  // Give bot instance to already-running auto-updater
+        }
+        // ============================================
+        
         // Apply config settings to the new instance
         cyphers.public = global.status !== undefined ? global.status : true;
 
@@ -558,50 +591,6 @@ async function startBot() {
         }
 
         store.bind(cyphers.ev);
-        
-        // ============================================
-        // AUTO-UPDATER INTEGRATION (FROM WORKING FILE)
-        // ============================================
-        
-        if (!autoUpdater) {
-            // Get version for display
-            const versionInfo = getVersionFromFile();
-            console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-            console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
-            console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
-            
-            autoUpdater = new AutoUpdater(cyphers);
-            
-            // Custom event handler for update notifications
-            autoUpdater.onUpdateComplete = async (changes, commitHash) => {
-                // Get updated version
-                const updatedVersion = getVersionFromFile();
-                
-                // Clean up temporary files after update (silently)
-                cleanupTempUpdateFiles();
-                
-                // Show updated version
-                console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
-                
-                // Apply config settings after update
-                applyConfigSettings();
-                
-                // Send notification if needed
-                await sendUpdateNotification(cyphers, changes, commitHash);
-            };
-            
-            autoUpdater.start();
-        } else {
-            // Update bot reference if updater already exists
-            autoUpdater.bot = cyphers;
-        }
-        
-        // Clean up any existing temp files on startup
-        cleanupTempUpdateFiles();
-        
-        // ============================================
-        // END OF AUTO-UPDATER INTEGRATION
-        // ============================================
         
         // Setup enhanced hot reload
         loadPlugins();
@@ -633,7 +622,6 @@ async function startBot() {
                     const commandName = args.shift().toLowerCase();
                     const quoted = m.quoted || null;
                     
-                    // Get latest plugins (always fresh due to hot reload)
                     const plugin = Object.values(plugins).find(p => 
                         p.name.toLowerCase() === commandName
                     );
@@ -693,7 +681,6 @@ async function startBot() {
             }
         });
         
-        // Channel IDs (Your two channels only)
         global.idch1  = "https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j"
         global.idch2  = "https://whatsapp.com/channel/0029VbBjA7047XeKSb012y3j"
 
@@ -703,7 +690,6 @@ async function startBot() {
                 const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
                 console.log(color('Connection closed:', 'deeppink'), lastDisconnect.error?.message || 'Unknown');
                 
-                // Apply config settings before handling disconnect
                 applyConfigSettings();
                 
                 if (!lastDisconnect?.error) {
@@ -748,10 +734,8 @@ async function startBot() {
             } else if (connection === "open") {
                 console.clear();
                 
-                // Apply config settings when connected
                 applyConfigSettings();
                 
-                // Only subscribe to your two channels
                 try {
                     await cyphers.newsletterFollow("https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j");
                     console.log(color(`✅ Channel 1 subscribed`, 'green'));
@@ -766,11 +750,8 @@ async function startBot() {
                     console.log(color(`✗ Failed Channel 2: ${error.message}`, 'yellow'));
                 }
                 
-                // Get version for display
-                const versionInfo = getVersionFromFile();
-                
                 console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-                console.log('\x1b[32m│             ✅ ' + versionInfo + '                    │\x1b[0m');
+                console.log('\x1b[32m│             ✅ CYPHERS-v2                        │\x1b[0m');
                 console.log(`\x1b[32m│     📦 ${Object.keys(plugins).length} plugins loaded                        │\x1b[0m`);
                 console.log('\x1b[32m│     ⚡  Live updates by cybercyphers                          │\x1b[0m');
                 console.log(`\x1b[32m│     🔄 Auto-updates: ${global.allowUpdates ? 'Enabled' : 'Disabled'}                     │\x1b[0m`);
