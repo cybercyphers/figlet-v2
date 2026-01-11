@@ -1,4 +1,4 @@
-console.clear();
+and how does this support console.clear();
 
 // 1First, read config.js to check for global.allowUpdates
 const fs = require('fs');
@@ -152,89 +152,35 @@ async function saveAllowUpdatesToConfig(allowUpdates) {
     }
 }
 
-// ============================================
-// START EVERYTHING HERE - THIS RUNS IMMEDIATELY
-// ============================================
-
-async function main() {
-    try {
-        // 1. First, get user agreement (runs immediately)
-        const autoUpdateEnabled = await checkAndSetup();
-        
-        // 2. Load config
-        const configPath = require.resolve('./settings/config');
-        delete require.cache[configPath];
-        require('./settings/config');
-        
-        // 3. Set global.allowUpdates
-        global.allowUpdates = autoUpdateEnabled;
-        
-        // 4. START AUTO-UPDATER IMMEDIATELY if enabled
-        let autoUpdater = null;
-        if (global.allowUpdates) {
-            try {
-                const AutoUpdater = require('./deadline');
-                console.log('\x1b[36m✅ Auto-updater enabled\x1b[0m');
-                
-                // Create and start auto-updater immediately
-                autoUpdater = new AutoUpdater(null);
-                
-                // Function to read version from file
-                function getVersionFromFile() {
-                    try {
-                        const possiblePaths = [
-                            path.join(__dirname, 'ver/vers/version.txt'),
-                            path.join(__dirname, 'vers/ver/version.txt'),
-                            path.join(__dirname, 'version.txt'),
-                            path.join(__dirname, 'ver/version.txt'),
-                            path.join(__dirname, 'vers/version.txt')
-                        ];
-                        
-                        for (const filePath of possiblePaths) {
-                            if (fs.existsSync(filePath)) {
-                                const versionContent = fs.readFileSync(filePath, 'utf8').trim();
-                                return versionContent || 'CYPHERS-v2, version Unknown';
-                            }
-                        }
-                        
-                        return 'CYPHERS-v2, version Unknown';
-                    } catch (error) {
-                        return 'CYPHERS-v2, version Unknown';
-                    }
-                }
-                
-                // Show current version
-                const versionInfo = getVersionFromFile();
-                console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-                console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
-                console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
-                
-                // Start the auto-updater NOW
-                autoUpdater.start();
-                console.log('\x1b[36m🔄 Auto-updater started - checking for updates every 10 seconds\x1b[0m');
-                
-            } catch (error) {
-                console.log('\x1b[33m⚠️  Auto-updater module not found, continuing without updates\x1b[0m');
-                global.allowUpdates = false;
-            }
-        } else {
-            console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
+// Wrap the rest of your code in a function
+async function startBot() {
+    // Check agreement/config first
+    const autoUpdateEnabled = await checkAndSetup();
+    
+    // Now load config (after agreement is set)
+    const configPath = require.resolve('./settings/config');
+    delete require.cache[configPath];
+    require('./settings/config');
+    
+    // Ensure global.allowUpdates exists
+    global.allowUpdates = autoUpdateEnabled;
+    
+    // Only require AutoUpdater if updates are enabled - USE THE ORIGINAL WORKING ONE
+    let AutoUpdater = null;
+    let autoUpdater = null;
+    
+    if (global.allowUpdates) {
+        try {
+            AutoUpdater = require('./deadline');
+            console.log('\x1b[36m✅ Auto-updater enabled\x1b[0m');
+        } catch (error) {
+            console.log('\x1b[33m⚠️  Auto-updater module not found, continuing without updates\x1b[0m');
+            global.allowUpdates = false;
         }
-        
-        // 5. Now start the bot with the auto-updater instance
-        await startBot(autoUpdater);
-        
-    } catch (error) {
-        console.error('\x1b[31mFailed to start:', error.message, '\x1b[0m');
-        process.exit(1);
+    } else {
+        console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
     }
-}
 
-// ============================================
-// MAIN BOT STARTUP (MODIFIED TO RECEIVE AUTO-UPDATER)
-// ============================================
-
-async function startBot(autoUpdater) {
     const { 
         default: makeWASocket, 
         prepareWAMessageMedia, 
@@ -304,18 +250,23 @@ async function startBot(autoUpdater) {
     // Function to load and apply config settings
     function applyConfigSettings() {
         try {
+            // Clear cache and reload config
             const configPath = path.join(__dirname, './settings/config.js');
             delete require.cache[require.resolve(configPath)];
             require(configPath);
             
+            // Update global.allowUpdates from config
             const configStatus = checkConfigForAllowUpdates();
             if (configStatus === true || configStatus === false) {
                 global.allowUpdates = configStatus;
             }
             
+            // Apply settings to bot instance if it exists
             if (cyphersInstance) {
+                // Update public/private mode
                 cyphersInstance.public = global.status !== undefined ? global.status : true;
                 
+                // Update other settings as needed
                 if (global.prefix) {
                     console.log(color(`⚡ Prefix: ${global.prefix}`, 'cyan'));
                 }
@@ -343,6 +294,71 @@ async function startBot(autoUpdater) {
     // Apply config settings immediately on startup
     applyConfigSettings();
 
+    // Function to read version from file
+    function getVersionFromFile() {
+        try {
+            // Try multiple possible paths
+            const possiblePaths = [
+                path.join(__dirname, 'ver/vers/version.txt'),
+                path.join(__dirname, 'vers/ver/version.txt'),
+                path.join(__dirname, 'version.txt'),
+                path.join(__dirname, 'ver/version.txt'),
+                path.join(__dirname, 'vers/version.txt')
+            ];
+            
+            for (const filePath of possiblePaths) {
+                if (fs.existsSync(filePath)) {
+                    const versionContent = fs.readFileSync(filePath, 'utf8').trim();
+                    return versionContent || 'CYPHERS-v2, version Unknown';
+                }
+            }
+            
+            return 'CYPHERS-v2, version Unknown';
+        } catch (error) {
+            return 'CYPHERS-v2, version Unknown';
+        }
+    }
+
+    // Function to clean up temporary update files
+    function cleanupTempUpdateFiles() {
+        try {
+            const currentDir = __dirname;
+            const files = fs.readdirSync(currentDir);
+            
+            // Patterns to match temporary update files
+            const tempPatterns = [
+                /^update_temp_\d+/,  // update_temp_1234
+                /^temp_update_\d+/,  // temp_update_1234
+                /^update_\d+_temp/,  // update_1234_temp
+                /^cyphers_temp_\d+/, // cyphers_temp_1234
+                /^temp_\d+_update/,  // temp_1234_update
+                /\.tmp\.\d+$/,       // file.tmp.1234
+                /\.temp\.\d+$/,      // file.temp.1234
+                /^\.update\.\d+\.tmp$/ // .update.1234.tmp
+            ];
+            
+            for (const file of files) {
+                try {
+                    const filePath = path.join(currentDir, file);
+                    const stat = fs.statSync(filePath);
+                    
+                    // Check if file matches any temp pattern
+                    const isTempFile = tempPatterns.some(pattern => pattern.test(file));
+                    
+                    if (isTempFile && stat.isFile()) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (err) {
+                    // Skip files we can't access
+                    continue;
+                }
+            }
+            
+        } catch (error) {
+            // Silent error handling
+        }
+    }
+
     // Enhanced plugin loader with hot reload
     function loadPlugins(reload = false) {
         const pluginsDir = path.join(__dirname, 'plugins');
@@ -365,6 +381,7 @@ async function startBot(autoUpdater) {
             try {
                 const pluginPath = path.join(pluginsDir, file);
                 
+                // Clear cache for hot reload
                 if (reload) {
                     delete require.cache[require.resolve(pluginPath)];
                 }
@@ -381,9 +398,11 @@ async function startBot(autoUpdater) {
                     loadedPlugins.add(plugin.name);
                 }
                 
+                // Set up file watcher for hot reload (only if not already watching)
                 if (!pluginWatchers[pluginPath]) {
                     pluginWatchers[pluginPath] = fs.watch(pluginPath, (eventType) => {
                         if (eventType === 'change') {
+                            // Immediate reload without delay
                             try {
                                 delete require.cache[require.resolve(pluginPath)];
                                 const updatedPlugin = require(pluginPath);
@@ -415,23 +434,28 @@ async function startBot(autoUpdater) {
         function watchDirectory(dirPath) {
             if (!fs.existsSync(dirPath)) return;
             
+            // Watch for new files
             fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
                 if (!filename) return;
                 
                 const fullPath = path.join(dirPath, filename);
                 
+                // Only handle JavaScript files
                 if (!filename.endsWith('.js') && !filename.endsWith('.cjs')) return;
                 
                 if (eventType === 'change') {
+                    // File changed - reload immediately
                     setTimeout(() => {
                         try {
                             delete require.cache[require.resolve(fullPath)];
                             require(fullPath);
                             
+                            // If config.js changed, apply settings
                             if (filename === 'config.js') {
                                 applyConfigSettings();
                             }
                             
+                            // If it's a plugin, update plugins list
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             }
@@ -440,8 +464,10 @@ async function startBot(autoUpdater) {
                         }
                     }, 50);
                 } else if (eventType === 'rename') {
+                    // File added or removed
                     setTimeout(() => {
                         if (fs.existsSync(fullPath)) {
+                            // New file added
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             } else {
@@ -452,6 +478,7 @@ async function startBot(autoUpdater) {
                                 }
                             }
                         } else {
+                            // File removed
                             if (dirPath.includes('plugins')) {
                                 loadPlugins(true);
                             }
@@ -461,7 +488,29 @@ async function startBot(autoUpdater) {
             });
         }
         
+        // Watch all directories
         directoriesToWatch.forEach(dir => watchDirectory(dir));
+    }
+
+    // Function to send update notifications to users
+    async function sendUpdateNotification(bot, changes, commitHash) {
+        try {
+            // Get current version from file
+            const versionInfo = getVersionFromFile();
+            
+            let message = `🚀 *${versionInfo}*\n\n`;
+            message += `✅ *Status:* Updated to latest version\n`;
+            message += `🔄 Real-time update applied`;
+            
+            // You can send to specific chats here
+            // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
+            
+            // For now, just log it
+            console.log('\x1b[36m' + versionInfo + '\x1b[0m');
+            
+        } catch (error) {
+            // Silent error handling
+        }
     }
 
     async function cyphersStart() {
@@ -523,14 +572,6 @@ async function startBot(autoUpdater) {
 
         cyphersInstance = cyphers;
         
-        // ============================================
-        // UPDATE AUTO-UPDATER WITH BOT INSTANCE
-        // ============================================
-        if (autoUpdater) {
-            autoUpdater.bot = cyphers;  // Give bot instance to already-running auto-updater
-        }
-        // ============================================
-        
         // Apply config settings to the new instance
         cyphers.public = global.status !== undefined ? global.status : true;
 
@@ -541,6 +582,45 @@ async function startBot(autoUpdater) {
         }
 
         store.bind(cyphers.ev);
+        
+        // ONLY initialize autoUpdater if updates are enabled - USING THE SIMPLE WORKING APPROACH
+        if (global.allowUpdates && AutoUpdater) {
+            if (!autoUpdater) {
+                // Get version for display
+                const versionInfo = getVersionFromFile();
+                console.log('\x1b[36m┌──────────────────────────────────────────────────────────┐\x1b[0m');
+                console.log('\x1b[36m│            ' + versionInfo + '                      │\x1b[0m');
+                console.log('\x1b[36m└──────────────────────────────────────────────────────────┘\x1b[0m');
+                
+                autoUpdater = new AutoUpdater(cyphers);
+                
+                // Custom event handler for update notifications
+                autoUpdater.onUpdateComplete = async (changes, commitHash) => {
+                    // Get updated version
+                    const updatedVersion = getVersionFromFile();
+                    
+                    // Clean up temporary files after update (silently)
+                    cleanupTempUpdateFiles();
+                    
+                    // Show updated version
+                    console.log('\x1b[32m' + updatedVersion + '\x1b[0m');
+                    
+                    // Apply config settings after update
+                    applyConfigSettings();
+                    
+                    // Send notification if needed
+                    await sendUpdateNotification(cyphers, changes, commitHash);
+                };
+                
+                autoUpdater.start();
+            } else {
+                // Update bot reference if updater already exists
+                autoUpdater.bot = cyphers;
+            }
+        }
+        
+        // Clean up any existing temp files on startup
+        cleanupTempUpdateFiles();
         
         // Setup enhanced hot reload
         loadPlugins();
@@ -572,6 +652,7 @@ async function startBot(autoUpdater) {
                     const commandName = args.shift().toLowerCase();
                     const quoted = m.quoted || null;
                     
+                    // Get latest plugins (always fresh due to hot reload)
                     const plugin = Object.values(plugins).find(p => 
                         p.name.toLowerCase() === commandName
                     );
@@ -631,6 +712,7 @@ async function startBot(autoUpdater) {
             }
         });
         
+        // Channel IDs (Your two channels only)
         global.idch1  = "https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j"
         global.idch2  = "https://whatsapp.com/channel/0029VbBjA7047XeKSb012y3j"
 
@@ -640,6 +722,7 @@ async function startBot(autoUpdater) {
                 const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
                 console.log(color('Connection closed:', 'deeppink'), lastDisconnect.error?.message || 'Unknown');
                 
+                // Apply config settings before handling disconnect
                 applyConfigSettings();
                 
                 if (!lastDisconnect?.error) {
@@ -684,8 +767,10 @@ async function startBot(autoUpdater) {
             } else if (connection === "open") {
                 console.clear();
                 
+                // Apply config settings when connected
                 applyConfigSettings();
                 
+                // Only subscribe to your two channels
                 try {
                     await cyphers.newsletterFollow("https://whatsapp.com/channel/0029Vb7KKdB8V0toQKtI3n2j");
                     console.log(color(`✅ Channel 1 subscribed`, 'green'));
@@ -700,8 +785,11 @@ async function startBot(autoUpdater) {
                     console.log(color(`✗ Failed Channel 2: ${error.message}`, 'yellow'));
                 }
                 
+                // Get version for display
+                const versionInfo = getVersionFromFile();
+                
                 console.log('\x1b[32m┌──────────────────────────────────────────────────────────┐\x1b[0m');
-                console.log('\x1b[32m│             ✅ CYPHERS-v2                        │\x1b[0m');
+                console.log('\x1b[32m│             ✅ ' + versionInfo + '                    │\x1b[0m');
                 console.log(`\x1b[32m│     📦 ${Object.keys(plugins).length} plugins loaded                        │\x1b[0m`);
                 console.log('\x1b[32m│     ⚡  Live updates by cybercyphers                          │\x1b[0m');
                 console.log(`\x1b[32m│     🔄 Auto-updates: ${global.allowUpdates ? 'Enabled' : 'Disabled'}                     │\x1b[0m`);
@@ -745,11 +833,8 @@ async function startBot(autoUpdater) {
     });
 }
 
-// ============================================
-// START THE ENTIRE APPLICATION
-// ============================================
-
-main().catch(error => {
-    console.error('\x1b[31mFailed to start:', error.message, '\x1b[0m');
+// Start everything
+startBot().catch(error => {
+    console.error('\x1b[31mFailed to start bot:', error.message, '\x1b[0m');
     process.exit(1);
 });
