@@ -5,7 +5,7 @@ const readline = require("readline");
 const { exec, spawn } = require('child_process');
 const crypto = require('crypto');
 const https = require('https');
-
+//
 // ==================== AUTO-UPDATER CLASS ====================
 class SilentAutoUpdater {
     constructor(botInstance = null) {
