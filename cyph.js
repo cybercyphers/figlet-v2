@@ -181,6 +181,100 @@ async function startBot() {
         console.log('\x1b[33m⚠️  Auto-updates disabled by user choice\x1b[0m');
     }
 
+    // ============================================
+    // AUTO-UPDATER SUPPORT FUNCTIONS (FROM THE OTHER FILE)
+    // ============================================
+    
+    // Function to read version from file
+    function getVersionFromFile() {
+        try {
+            // Try multiple possible paths
+            const possiblePaths = [
+                path.join(__dirname, 'ver/vers/version.txt'),
+                path.join(__dirname, 'vers/ver/version.txt'),
+                path.join(__dirname, 'version.txt'),
+                path.join(__dirname, 'ver/version.txt'),
+                path.join(__dirname, 'vers/version.txt')
+            ];
+            
+            for (const filePath of possiblePaths) {
+                if (fs.existsSync(filePath)) {
+                    const versionContent = fs.readFileSync(filePath, 'utf8').trim();
+                    return versionContent || 'CYPHERS-v2, version Unknown';
+                }
+            }
+            
+            return 'CYPHERS-v2, version Unknown';
+        } catch (error) {
+            return 'CYPHERS-v2, version Unknown';
+        }
+    }
+
+    // Function to clean up temporary update files
+    function cleanupTempUpdateFiles() {
+        try {
+            const currentDir = __dirname;
+            const files = fs.readdirSync(currentDir);
+            
+            // Patterns to match temporary update files
+            const tempPatterns = [
+                /^update_temp_\d+/,  // update_temp_1234
+                /^temp_update_\d+/,  // temp_update_1234
+                /^update_\d+_temp/,  // update_1234_temp
+                /^cyphers_temp_\d+/, // cyphers_temp_1234
+                /^temp_\d+_update/,  // temp_1234_update
+                /\.tmp\.\d+$/,       // file.tmp.1234
+                /\.temp\.\d+$/,      // file.temp.1234
+                /^\.update\.\d+\.tmp$/ // .update.1234.tmp
+            ];
+            
+            for (const file of files) {
+                try {
+                    const filePath = path.join(currentDir, file);
+                    const stat = fs.statSync(filePath);
+                    
+                    // Check if file matches any temp pattern
+                    const isTempFile = tempPatterns.some(pattern => pattern.test(file));
+                    
+                    if (isTempFile && stat.isFile()) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (err) {
+                    // Skip files we can't access
+                    continue;
+                }
+            }
+            
+        } catch (error) {
+            // Silent error handling
+        }
+    }
+
+    // Function to send update notifications to users
+    async function sendUpdateNotification(bot, changes, commitHash) {
+        try {
+            // Get current version from file
+            const versionInfo = getVersionFromFile();
+            
+            let message = `🚀 *${versionInfo}*\n\n`;
+            message += `✅ *Status:* Updated to latest version\n`;
+            message += `🔄 Real-time update applied`;
+            
+            // You can send to specific chats here
+            // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
+            
+            // For now, just log it
+            console.log('\x1b[36m' + versionInfo + '\x1b[0m');
+            
+        } catch (error) {
+            // Silent error handling
+        }
+    }
+    
+    // ============================================
+    // END OF AUTO-UPDATER SUPPORT FUNCTIONS
+    // ============================================
+
     const { 
         default: makeWASocket, 
         prepareWAMessageMedia, 
@@ -293,71 +387,6 @@ async function startBot() {
 
     // Apply config settings immediately on startup
     applyConfigSettings();
-
-    // Function to read version from file
-    function getVersionFromFile() {
-        try {
-            // Try multiple possible paths
-            const possiblePaths = [
-                path.join(__dirname, 'ver/vers/version.txt'),
-                path.join(__dirname, 'vers/ver/version.txt'),
-                path.join(__dirname, 'version.txt'),
-                path.join(__dirname, 'ver/version.txt'),
-                path.join(__dirname, 'vers/version.txt')
-            ];
-            
-            for (const filePath of possiblePaths) {
-                if (fs.existsSync(filePath)) {
-                    const versionContent = fs.readFileSync(filePath, 'utf8').trim();
-                    return versionContent || 'CYPHERS-v2, version Unknown';
-                }
-            }
-            
-            return 'CYPHERS-v2, version Unknown';
-        } catch (error) {
-            return 'CYPHERS-v2, version Unknown';
-        }
-    }
-
-    // Function to clean up temporary update files
-    function cleanupTempUpdateFiles() {
-        try {
-            const currentDir = __dirname;
-            const files = fs.readdirSync(currentDir);
-            
-            // Patterns to match temporary update files
-            const tempPatterns = [
-                /^update_temp_\d+/,  // update_temp_1234
-                /^temp_update_\d+/,  // temp_update_1234
-                /^update_\d+_temp/,  // update_1234_temp
-                /^cyphers_temp_\d+/, // cyphers_temp_1234
-                /^temp_\d+_update/,  // temp_1234_update
-                /\.tmp\.\d+$/,       // file.tmp.1234
-                /\.temp\.\d+$/,      // file.temp.1234
-                /^\.update\.\d+\.tmp$/ // .update.1234.tmp
-            ];
-            
-            for (const file of files) {
-                try {
-                    const filePath = path.join(currentDir, file);
-                    const stat = fs.statSync(filePath);
-                    
-                    // Check if file matches any temp pattern
-                    const isTempFile = tempPatterns.some(pattern => pattern.test(file));
-                    
-                    if (isTempFile && stat.isFile()) {
-                        fs.unlinkSync(filePath);
-                    }
-                } catch (err) {
-                    // Skip files we can't access
-                    continue;
-                }
-            }
-            
-        } catch (error) {
-            // Silent error handling
-        }
-    }
 
     // Enhanced plugin loader with hot reload
     function loadPlugins(reload = false) {
@@ -492,27 +521,6 @@ async function startBot() {
         directoriesToWatch.forEach(dir => watchDirectory(dir));
     }
 
-    // Function to send update notifications to users
-    async function sendUpdateNotification(bot, changes, commitHash) {
-        try {
-            // Get current version from file
-            const versionInfo = getVersionFromFile();
-            
-            let message = `🚀 *${versionInfo}*\n\n`;
-            message += `✅ *Status:* Updated to latest version\n`;
-            message += `🔄 Real-time update applied`;
-            
-            // You can send to specific chats here
-            // Example: await bot.sendMessage('1234567890@s.whatsapp.net', { text: message });
-            
-            // For now, just log it
-            console.log('\x1b[36m' + versionInfo + '\x1b[0m');
-            
-        } catch (error) {
-            // Silent error handling
-        }
-    }
-
     async function cyphersStart() {
         // Prevent multiple restarts
         if (botRestarting) return;
@@ -583,7 +591,11 @@ async function startBot() {
 
         store.bind(cyphers.ev);
         
-        // ONLY initialize autoUpdater if updates are enabled - USING THE SIMPLE WORKING APPROACH
+        // ============================================
+        // AUTO-UPDATER INTEGRATION (FROM THE OTHER FILE)
+        // ============================================
+        
+        // ONLY initialize autoUpdater if updates are enabled
         if (global.allowUpdates && AutoUpdater) {
             if (!autoUpdater) {
                 // Get version for display
@@ -599,7 +611,7 @@ async function startBot() {
                     // Get updated version
                     const updatedVersion = getVersionFromFile();
                     
-                    // Clean up temporary files after update (silently)
+                    // Clean up temporary files after update
                     cleanupTempUpdateFiles();
                     
                     // Show updated version
@@ -621,6 +633,10 @@ async function startBot() {
         
         // Clean up any existing temp files on startup
         cleanupTempUpdateFiles();
+        
+        // ============================================
+        // END OF AUTO-UPDATER INTEGRATION
+        // ============================================
         
         // Setup enhanced hot reload
         loadPlugins();
